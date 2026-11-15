@@ -197,6 +197,37 @@ async def frames_api(request):
     return web.json_response({'stats': STATS, 'frames': list(LAST)})
 
 
+HTTP_METHODS = (b'GET ', b'POST', b'PUT ', b'HEAD', b'DELE')
+
+
+def build_http_response(body: bytes = b'{}', status: str = '200 OK',
+                        ctype: str = 'application/json') -> bytes:
+    head = (
+        'HTTP/1.1 ' + status + '\r\n'
+        'Content-Type: ' + ctype + '\r\n'
+        'Content-Length: ' + str(len(body)) + '\r\n'
+        'Connection: close\r\n'
+        '\r\n'
+    ).encode('ascii')
+    return head + body
+
+
+def log_http(payload: bytes):
+    try:
+        text = payload.decode('utf-8', 'replace')
+        head = text.split('\r\n\r\n')[0]
+        lines = head.split('\r\n')
+        print('[http] ' + lines[0], flush=True)
+        for line in lines[1:8]:
+            if line.strip():
+                print('       ' + line, flush=True)
+        tail = text.split('\r\n\r\n', 1)
+        if len(tail) == 2 and tail[1]:
+            print('       body: ' + tail[1][:300], flush=True)
+    except Exception:
+        pass
+
+
 async def ws_handler(request):
     ws = web.WebSocketResponse(max_msg_size=4 * 1024 * 1024)
     await ws.prepare(request)
@@ -210,6 +241,14 @@ async def ws_handler(request):
                 break
             continue
         STATS['frames'] += 1
+
+        # HTTP-запрос от клиента: отвечаем HTTP, без префикса длины
+        if msg.data[:4] in HTTP_METHODS:
+            log_http(msg.data)
+            body = b'{"ok":true}'
+            await ws.send_bytes(build_http_response(body))
+            continue
+
         payload, kind = split_frame(msg.data)
         info = parse_client_message(payload)
         print('[frame %d] %s  nonce=%d uuid=%s kind=%s'
