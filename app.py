@@ -30,7 +30,10 @@ SCHEMA_CANDIDATES = [
     os.path.join(HERE, '..', '..', 'work', 'proto_schema.json'),
 ]
 
+from collections import deque
+
 STATS = {'connections': 0, 'frames': 0}
+LAST = deque(maxlen=60)
 
 
 # ---------- protobuf ----------
@@ -190,6 +193,10 @@ async def health(request):
     return web.json_response({'ok': True, 'schema': len(SCHEMA), 'stats': STATS})
 
 
+async def frames_api(request):
+    return web.json_response({'stats': STATS, 'frames': list(LAST)})
+
+
 async def ws_handler(request):
     ws = web.WebSocketResponse(max_msg_size=4 * 1024 * 1024)
     await ws.prepare(request)
@@ -208,6 +215,17 @@ async def ws_handler(request):
         print('[frame %d] %s  nonce=%d uuid=%s kind=%s'
               % (STATS['frames'], ', '.join(info['requests']) or '(empty)',
                  info['nonce'], info['uuid'], kind), flush=True)
+        try:
+            LAST.append({
+                'n': STATS['frames'],
+                'kind': kind,
+                'size': len(payload),
+                'requests': info['requests'],
+                'nonce': info['nonce'],
+                'uuid': info['uuid'],
+            })
+        except Exception:
+            pass
         await ws.send_bytes(frame_out(build_response(info['nonce']), kind))
 
     print('[-] ws close %s' % peer, flush=True)
@@ -218,6 +236,7 @@ def main():
     app = web.Application()
     app.router.add_get('/', health)
     app.router.add_get('/ws', ws_handler)
+    app.router.add_get('/api/frames', frames_api)
     port = int(os.environ.get('PORT', '8080'))
     web.run_app(app, host='0.0.0.0', port=port, print=lambda *a: print(*a, flush=True))
 
