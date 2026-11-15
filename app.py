@@ -119,6 +119,57 @@ def describe_request(payload):
     return hits
 
 
+def request_field_numbers(payload):
+    """Возвращает номера полей из ClientMessage_Request (т.е. какие запросы прислали)."""
+    nums = []
+    i = 0
+    try:
+        while i < len(payload):
+            tag, i = read_varint(payload, i)
+            num, wt = tag >> 3, tag & 7
+            if wt == 0:
+                v, i = read_varint(payload, i)
+            elif wt == 2:
+                ln, i = read_varint(payload, i)
+                i += ln
+            elif wt == 5:
+                i += 4
+            elif wt == 1:
+                i += 8
+            else:
+                break
+    except Exception:
+        pass
+    return nums
+
+
+def request_numbers(frame):
+    """Номера запросов из ClientMessage (поле 4 = repeated ClientMessage_Request)."""
+    out = []
+    i = 0
+    try:
+        while i < len(frame):
+            tag, i = read_varint(frame, i)
+            num, wt = tag >> 3, tag & 7
+            if wt == 0:
+                _, i = read_varint(frame, i)
+            elif wt == 2:
+                ln, i = read_varint(frame, i)
+                chunk = frame[i:i + ln]
+                i += ln
+                if num == 4:
+                    out.extend(request_field_numbers(chunk))
+            elif wt == 5:
+                i += 4
+            elif wt == 1:
+                i += 8
+            else:
+                break
+    except Exception:
+        pass
+    return out
+
+
 def parse_client_message(payload):
     """ClientMessage: uuid=1, protocol_version=2, requests=4, nonce=1000, hash=1001."""
     out = {'requests': [], 'nonce': 0, 'hash': 0, 'uuid': None}
@@ -150,6 +201,15 @@ def parse_client_message(payload):
     except Exception:
         pass
     return out
+
+
+def build_response_for(nonce, req_nums, uuid_str):
+    parts = [field(1000, 0, nonce)]
+    if 4 in req_nums:  # register_
+        rr = field(1, 2, uuid_str.encode()) + field(3, 0, 0)
+        parts.append(field(3, 2, rr))
+    resp = b''.join(parts)
+    return field(1, 2, resp) + field(2, 0, 0)
 
 
 def build_response(nonce):
@@ -267,7 +327,11 @@ async def ws_handler(request):
                 except Exception:
                     pass
                 print('[pb %d] %s nonce=%d' % (STATS['frames'], ', '.join(info['requests']) or '(empty)', info['nonce']), flush=True)
-                await ws.send_bytes(frame_out(build_response(info['nonce']), 'varint'))
+                nums = request_numbers(frame)
+                u = uuid.uuid4().hex
+                resp = build_response_for(info['nonce'], nums, u)
+                print('[resp %d] requests=%s uuid=%s' % (STATS['frames'], nums, u), flush=True)
+                await ws.send_bytes(frame_out(resp, 'varint'))
             continue
 
         STATS['frames'] += 1
