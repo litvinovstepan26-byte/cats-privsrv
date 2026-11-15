@@ -235,11 +235,41 @@ async def ws_handler(request):
     peer = request.remote
     print('[+] ws connect %s' % peer, flush=True)
 
+    buf = bytearray()
+
     async for msg in ws:
         if msg.type != WSMsgType.BINARY:
             if msg.type == WSMsgType.ERROR:
                 break
             continue
+        # HTTP-запрос от клиента (балансер) — идёт отдельным соединением
+        if bytes(msg.data[:4]) in HTTP_METHODS:
+            pass
+        else:
+            buf.extend(msg.data)
+            while True:
+                try:
+                    n, i = read_varint(bytes(buf), 0)
+                except Exception:
+                    break
+                if n <= 0 or len(buf) < i + n:
+                    break
+                frame = bytes(buf[i:i + n])
+                del buf[:i + n]
+                STATS['frames'] += 1
+                info = parse_client_message(frame)
+                try:
+                    LAST.append({
+                        'n': STATS['frames'], 'kind': 'pb', 'size': len(frame),
+                        'requests': info['requests'], 'nonce': info['nonce'],
+                        'uuid': info['uuid'], 'hex': frame[:96].hex(),
+                    })
+                except Exception:
+                    pass
+                print('[pb %d] %s nonce=%d' % (STATS['frames'], ', '.join(info['requests']) or '(empty)', info['nonce']), flush=True)
+                await ws.send_bytes(frame_out(build_response(info['nonce']), 'varint'))
+            continue
+
         STATS['frames'] += 1
 
         # HTTP-запрос от клиента: отвечаем HTTP, без префикса длины
