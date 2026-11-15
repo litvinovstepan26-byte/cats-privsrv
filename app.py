@@ -205,6 +205,9 @@ def parse_client_message(payload):
 
 def build_response_for(nonce, req_nums, uuid_str):
     parts = [field(1000, 0, nonce)]
+    if 164 in req_nums:  # check_tos -> ServerMessage_TOS{ ok{} }
+        tos = field(1, 2, b'')          # ok: ServerMessage_TOS_Ok {}
+        parts.append(field(67, 2, tos))  # Response.tos = 67
     if 4 in req_nums:  # register_
         rr = field(1, 2, uuid_str.encode()) + field(3, 0, 0)
         parts.append(field(3, 2, rr))
