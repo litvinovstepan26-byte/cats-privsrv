@@ -251,8 +251,9 @@ async def ws_handler(request):
                              'hex': msg.data[:160].hex()})
             except Exception:
                 pass
-            body = b'{"ok":true}'
-            await ws.send_bytes(build_http_response(body))
+            body = os.environ.get('BAL_BODY', '127.0.0.1:7710').encode('utf-8')
+            ctype = 'text/plain'
+            await ws.send_bytes(build_http_response(body, ctype=ctype))
             continue
 
         payload, kind = split_frame(msg.data)
