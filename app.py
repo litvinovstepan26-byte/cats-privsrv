@@ -257,7 +257,7 @@ async def ws_handler(request):
                 "status": "OK",
                 "instance": {
                     "host": os.environ.get('GAME_HOST', '127.0.0.1'),
-                    "port": int(os.environ.get('GAME_PORT', '7710')),
+                    "port": int(os.environ.get('GAME_PORT', '7711')),
                 },
             }
             body = json.dumps(bal).encode('utf-8')
