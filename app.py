@@ -251,8 +251,17 @@ async def ws_handler(request):
                              'hex': msg.data[:160].hex()})
             except Exception:
                 pass
-            body = os.environ.get('BAL_BODY', '127.0.0.1:7710').encode('utf-8')
-            ctype = 'text/plain'
+            # точный формат балансера ZeptoLab (снят с живого ответа):
+            # {"status":"OK","instance":{"host":"...","port":7010}}
+            bal = {
+                "status": "OK",
+                "instance": {
+                    "host": os.environ.get('GAME_HOST', '127.0.0.1'),
+                    "port": int(os.environ.get('GAME_PORT', '7710')),
+                },
+            }
+            body = json.dumps(bal).encode('utf-8')
+            ctype = 'application/json'
             await ws.send_bytes(build_http_response(body, ctype=ctype))
             continue
 
