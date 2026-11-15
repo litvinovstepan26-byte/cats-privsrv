@@ -203,8 +203,8 @@ def parse_client_message(payload):
     return out
 
 
-def build_response_for(nonce, req_nums, uuid_str):
-    parts = [field(1000, 0, nonce)]
+def build_response_for(nonce, req_nums, uuid_str, req_hash=0):
+    parts = [field(1000, 0, nonce), field(1001, 0, req_hash)]
     if 164 in req_nums:  # check_tos -> ServerMessage_TOS{ ok{} }
         tos = field(1, 2, b'')          # ok: ServerMessage_TOS_Ok {}
         parts.append(field(67, 2, tos))  # Response.tos = 67
@@ -332,7 +332,7 @@ async def ws_handler(request):
                 print('[pb %d] %s nonce=%d' % (STATS['frames'], ', '.join(info['requests']) or '(empty)', info['nonce']), flush=True)
                 nums = request_numbers(frame)
                 u = uuid.uuid4().hex
-                resp = build_response_for(info['nonce'], nums, u)
+                resp = build_response_for(info['nonce'], nums, u, info.get('hash', 0))
                 print('[resp %d] requests=%s uuid=%s' % (STATS['frames'], nums, u), flush=True)
                 await ws.send_bytes(frame_out(resp, 'varint'))
             continue
