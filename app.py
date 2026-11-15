@@ -245,6 +245,12 @@ async def ws_handler(request):
         # HTTP-запрос от клиента: отвечаем HTTP, без префикса длины
         if msg.data[:4] in HTTP_METHODS:
             log_http(msg.data)
+            try:
+                line = msg.data.split(b'\r\n', 1)[0].decode('utf-8', 'replace')
+                LAST.append({'n': STATS['frames'], 'kind': 'http', 'line': line,
+                             'hex': msg.data[:160].hex()})
+            except Exception:
+                pass
             body = b'{"ok":true}'
             await ws.send_bytes(build_http_response(body))
             continue
