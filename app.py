@@ -223,6 +223,7 @@ async def ws_handler(request):
                 'requests': info['requests'],
                 'nonce': info['nonce'],
                 'uuid': info['uuid'],
+                'hex': payload[:64].hex(),
             })
         except Exception:
             pass
