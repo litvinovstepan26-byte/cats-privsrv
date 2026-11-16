@@ -670,8 +670,8 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(4, 2, T_OPPONENT))
         elif req == 156:  # start_tutorial_big_fight -> сразу даём соперника
             parts.append(field(4, 2, T_OPPONENT or b''))
-        elif req == 8:  # start_match -> соперник туториала (из эталона боя)
-            parts.append(field(4, 2, T_OPPONENT_TUT or T_OPPONENT or b''))
+        elif req == 8:  # start_match -> данные боя (клиент просит их повторно на «соперника»)
+            parts.append(field(21, 2, T_BIGFIGHT2 or T_BIGFIGHT or b''))
         elif req == 40:  # start_big_fight -> данные боя
             parts.append(field(21, 2, T_BIGFIGHT2 or T_BIGFIGHT))
         elif req in (9, 41, 157):  # результат боя -> Response.match_result(8)
