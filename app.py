@@ -621,8 +621,10 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(7, 2, T_LEADERBOARD))
         elif req == 19 and T_LBPOS:
             parts.append(field(11, 2, T_LBPOS))
-        elif req == 150:
-            parts.append(field(62, 2, b''))
+        elif req == 150:  # get_tutorial_dialogs
+            # отдаём настоящие диалоги: среди них реплика соперника перед
+            # туториальным боем («мои ребята разнесут этот гараж»)
+            parts.append(field(62, 2, T_TUTDIALOGS or b''))
         elif req == 154:  # get_tutorial_championship -> список соперников туториала
             parts.append(field(29, 2, T_INTRO or b''))
         elif req == 155:  # get_tutorial_championship_opponent
