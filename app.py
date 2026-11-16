@@ -1102,14 +1102,10 @@ def process_frame(frame, state):
                               info['hash'], state['name'], player)
     print('[resp %d] requests=%s uuid=%s coins=%d out=%d' % (
         STATS['frames'], nums, state['uuid'], player['coins'], len(resp)), flush=True)
-    out = [resp]
-    if 15 in nums and T_OPPONENT:
-        # настоящий сервер после установки детали сам присылает соперника —
-        # с этого начинается туториальный бой
-        push = field(1, 2, field(4, 2, T_OPPONENT)) + field(2, 0, int(time.time() * 1000))
-        out.append(push)
-        print('[push] opponent after install', flush=True)
-    return out
+    # ВАЖНО: никаких «пушей» вне ответа — клиент на неожиданный кадр рвёт
+    # соединение и заново проходит туториал. Соперник отдаётся только как
+    # ответ на запрос (31/155), как у настоящего сервера.
+    return [resp]
 
 
 # ---------- сырой TCP (LAN-режим, без моста) ----------
