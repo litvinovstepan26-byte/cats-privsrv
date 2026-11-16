@@ -1,0 +1,259 @@
+{
+ "profile_lite": {
+  "uuid": "787540177e784b198ca6a99cc05c3ae2",
+  "name": "testik",
+  "championship_stage": 0,
+  "medals_count": 0,
+  "prestige_count": 0,
+  "ultimate_points": 0,
+  "tag": 32376,
+  "skin": {
+   "selected_items": "08001002"
+  },
+  "global_ultimate_points": 0,
+  "access_to_game_features": {
+   "features": 3
+  },
+  "ultimate_league": 0,
+  "deletion_status": 0,
+  "card_pass_active": 0,
+  "device_ids": "4a3736018acfbdde"
+ },
+ "is_bot": 0,
+ "resources": {
+  "coins": 1000,
+  "gems": 0,
+  "skillpoints": 1,
+  "ultimate_tickets": {
+   "amount": 0,
+   "maximum": 5
+  },
+  "ultimate_coins": 0,
+  "special_event_currencies": "0a1173637261705f72756e5f31326e6f763236120c0a066d6564616c7312020800120e0a06656e67696e6512040800101e120a0a046b6579731202080012100a0a656e67696e655f626f781202080012250a05726567656e1204080e102c1a160904b505710b4b2c40102c1900000000000018402000",
+  "sponsor_keys": 0,
+  "ultimate_tokens": 0,
+  "pilot_class_currencies": "08041000",
+  "pilots_common_currency": 0,
+  "pilots_rare_currency": 0,
+  "pilots_extreme_currency": 0,
+  "joker_1": 0,
+  "joker_2": 0,
+  "joker_3": 0,
+  "joker_4": 0,
+  "joker_5": 0,
+  "skipits": 0
+ },
+ "bot_match_wins": 0,
+ "championship_stage": 0,
+ "tutorial_progress": 25,
+ "bot_matches": 0,
+ "last_known_league_size": 15,
+ "client_preferences": "\n\u0015registrationTimestamp\u0012\r1794822190424",
+ "big_fight_available": 0,
+ "name_for_support": "testik#32376",
+ "helpshift_tags": "bb none",
+ "metadata": {
+  "created": 1794822185522,
+  "total_sessions": 2,
+  "money_spent": 0.0,
+  "update_version": 40,
+  "last_login": 1794822234425,
+  "config_profile": "default",
+  "soft_launch_participant": 0,
+  "data_access_info": {
+   "entries": "0a0866616365626f6f6b1001"
+  }
+ },
+ "free_bet_recover": 1,
+ "unlocked_skills": 35,
+ "quick_match_streak_reward": {
+  "fights_left": 3,
+  "interval_between_rewards": 3,
+  "reward": {
+   "resources": {
+    "coins": 0,
+    "gems": 0,
+    "skillpoints": 0,
+    "ultimate_tickets": {
+     "amount": 0,
+     "maximum": 0
+    },
+    "ultimate_coins": 0,
+    "sponsor_keys": 0,
+    "ultimate_tokens": 0,
+    "pilot_class_currencies": "08041000",
+    "pilots_common_currency": 0,
+    "pilots_rare_currency": 0,
+    "pilots_extreme_currency": 0,
+    "joker_1": 0,
+    "joker_2": 0,
+    "joker_3": 0,
+    "joker_4": 0,
+    "joker_5": 0,
+    "skipits": 0
+   },
+   "locked_gacha_boxes": "08011004",
+   "ultimate_points": 0,
+   "crowns": 0,
+   "team_tower_points": 0,
+   "pilot_experience": 0
+  }
+ },
+ "win_streak": 0,
+ "remaining_gacha_box_ad_speedups": 25,
+ "next_crown_win_streak": 5,
+ "purchased_skin_items": "08011000",
+ "social_channel_link_reward": {
+  "resources": {
+   "coins": 0,
+   "gems": 15,
+   "skillpoints": 0,
+   "ultimate_tickets": {
+    "amount": 0,
+    "maximum": 0
+   },
+   "ultimate_coins": 0,
+   "sponsor_keys": 0,
+   "ultimate_tokens": 0,
+   "pilot_class_currencies": "08041000",
+   "pilots_common_currency": 0,
+   "pilots_rare_currency": 0,
+   "pilots_extreme_currency": 0,
+   "joker_1": 0,
+   "joker_2": 0,
+   "joker_3": 0,
+   "joker_4": 0,
+   "joker_5": 0,
+   "skipits": 0
+  },
+  "ultimate_points": 0,
+  "crowns": 0,
+  "hidden_parts": "0801100019000000000000000020002800",
+  "team_tower_points": 0,
+  "pilot_experience": 0
+ },
+ "special_event_data": "0a1248414c4c4f5745454e5f323032365f4b455940005000",
+ "vehicles_and_inventory": {
+  "normal_garage": {
+   "vehicle": "0800129b050a98051289050a0f43686173736973205431202330313610001a1020126a16d903ff9215258f5b901024be226730023a12090000000000a06640110000000000e06240400340054004400b400e400f40104012401440e9074017401a401c401d401e401f4020402340254028402b402e4031403340354037403b403c403d403e403f404340464048404d40474051405448016000225b30033a12090000000000a06b40110000000000606440400840094006400d400a400c401140074013401640e8074019401b40214024402640274029402a402c403040364038403a404040414044404b404a404f4052405348016000222d30db86033a12090000000000c06c40110000000000a068404002401540ea0740224042402f4034404948016000222d30d186033a12090000000000406040110000000000a068404002401540ea0740224042402f403440494801600032950108db860310001a8c010a8901127b0a0a576865656c202330303210001a105b00625a197b7c57aa548466b5d6d9762a49090000000000001c4011000000000000344019000000000000084021666666666666e63f30003a120900000000000069401100000000000069404805520059000000000000000060004800500061000000000000000090010018002000280030003800500132950108d1860310001a8c010a8901127b0a0a576865656c202330303210001a10b7babcc116e6667e1db3134a0477dbc82a49090000000000001c4011000000000000344019000000000000084021666666666666e63f30003a120900000000000069401100000000000069404805520059000000000000000060004800500061000000000000000090010018002000280030003800500148005000610000000000000000900100180020002800300038005001",
+   "vehicle_index": 0,
+   "inventory": {
+    "items": "0a650a6312550a0847756e202330303110001a10b45124f7d7a94fcfb948a584b2dda9fc2a2530003a1209000000000020654011000000000060694048025200590000000000000000600048005000610000000000000000900100180020002800300038005001"
+   },
+   "type": 0
+  },
+  "ultimate_garage": {
+   "vehicle_index": 0,
+   "inventory": {},
+   "type": 1
+  },
+  "pilots_garage": {
+   "max_pilot_level": 0
+  }
+ },
+ "players_invited": 0,
+ "ultimate_booster_time_left": 0,
+ "has_install_params": 1,
+ "movies_data": {
+  "state": 3,
+  "time_until_end": 3512030,
+  "possible_rewards": "12470800100020003204080010003800480050005a04080010005a04080110005a04080210005a04080310005a04080410006000680070007800800100880100900100980100a001002a0408011004300048005800c80100",
+  "rewards_received_in_a_row": 0
+ },
+ "ultimate_tickets_refill_count": 0,
+ "sponsor_box_opened_times": 0,
+ "sponsor_box_time_until_reset": 33325058,
+ "ads_privacy_default_status": 2,
+ "anti_addiction_sdk": 0,
+ "gear_score": 0,
+ "claimed_tutorial_copilot_free_resources": 0,
+ "xsolla_id": "b668ace1eeddda54",
+ "restores_used": 10,
+ "replaces_used": 10,
+ "scouts_used": 10,
+ "bolt_engine_ad_time_left_ms": 0,
+ "bolt_engine_nitro_time_left_ms": 0,
+ "opened_gachas": 0,
+ "new_gacha_speedup_time": 1800000,
+ "ads_watched_box_info": {
+  "watched_ads": 0,
+  "max_watched_ads": 6,
+  "upgraded_box": 0,
+  "time_to_claim_next_reward": 1794779074942
+ },
+ "first_purchase_reward": {
+  "parts": "0a7712690a074d696e6967756e10001a10326890762ef444d7a00cec81bf39437e2a2530003a12090000000000a068401100000000008066404802520059000000000000000060003a1308021100000000000059401800220210012a0048005001610000000000000000900100180020002800300038015001",
+  "resources": {
+   "coins": 0,
+   "gems": 0,
+   "skillpoints": 0,
+   "ultimate_tickets": {
+    "amount": 0,
+    "maximum": 0
+   },
+   "ultimate_coins": 0,
+   "sponsor_keys": 0,
+   "ultimate_tokens": 0,
+   "pilot_class_currencies": "08041000",
+   "pilots_common_currency": 0,
+   "pilots_rare_currency": 0,
+   "pilots_extreme_currency": 0,
+   "joker_1": 0,
+   "joker_2": 0,
+   "joker_3": 0,
+   "joker_4": 0,
+   "joker_5": 0,
+   "skipits": 0
+  },
+  "ultimate_points": 0,
+  "crowns": 0,
+  "team_tower_points": 0,
+  "skins": "0a04080010000a04086210010a04083e1002",
+  "pilot_experience": 0
+ },
+ "first_purchase_reward_secondary": {
+  "resources": {
+   "coins": 0,
+   "gems": 0,
+   "skillpoints": 0,
+   "ultimate_tickets": {
+    "amount": 0,
+    "maximum": 0
+   },
+   "ultimate_coins": 0,
+   "sponsor_keys": 0,
+   "ultimate_tokens": 0,
+   "pilot_class_currencies": "08041000",
+   "pilots_common_currency": 0,
+   "pilots_rare_currency": 0,
+   "pilots_extreme_currency": 0,
+   "joker_1": 0,
+   "joker_2": 0,
+   "joker_3": 0,
+   "joker_4": 0,
+   "joker_5": 0,
+   "skipits": 0
+  },
+  "ultimate_points": 0,
+  "crowns": 0,
+  "team_tower_points": 0,
+  "abstract_toolboxes": "08011001",
+  "pilot_experience": 0
+ },
+ "first_purchase_reward_value": 1500,
+ "first_purchase_reward_status": 1,
+ "spin_wheel_data": {
+  "state": 1
+ },
+ "disco_party_details": {
+  "event_id": "disco_party_2026_12NOV26_SR_IAP",
+  "state": 2,
+  "next_cost": {
+   "is_free": 1
+  },
+  "event_ends_in": 4525058,
+  "rewards": "0a097265776172645f313212820212470800100020003204080010003800480050005a04080010005a04080110005a04080210005a04080310005a04080410006000680070007800800100880100900100980100a00100300048005800ba01130a0f4c45475f554e49565f574541504f4e1008ba01130a0f4c45475f554e49565f574541504f4e1008ba01130a0f4c45475f554e49565f574541504f4e1008ba01130a0f4c45475f554e49565f574541504f4e1008ba01130a0f4c45475f554e49565f574541504f4e1008ba01130a0f4c45475f554e49565f574541504f4e1008ba01130a0f4c45475f554e49565f574541504f4e1008ba01130a0f4c45475f554e49565f574541504f4e1008c80100",
+  "moves_remaining": 1
+ },
+ "active_events": {}
+}
