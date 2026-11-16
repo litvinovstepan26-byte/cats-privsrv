@@ -18,8 +18,10 @@ Local run:
     PORT=8082 python app.py
 """
 
+import asyncio
 import json
 import os
+import sqlite3
 import struct
 import time
 import uuid
@@ -354,11 +356,12 @@ def lite_and_vehicles(profile):
     return lite, vai
 
 
-def patch_profile(profile, uuid_str):
+def patch_profile(profile, uuid_str, player_name=None, coins=None, gems=None,
+                  stage=None, tutorial=None, bigfight=None):
     """Real profile with substituted uuid / name / tag / device / currency."""
     raw_uuid = bytes.fromhex(uuid_str) if len(uuid_str) == 32 else uuid_str.encode()[:16]
     raw_uuid = raw_uuid[:16].ljust(16, b'\0')
-    name = ('player' + uuid_str[:4]).encode()
+    name = (player_name or ('player' + uuid_str[:4])).encode()
     tag = int(uuid_str[:6], 16) % 100000
     device = uuid_str[:16].encode()
     nfs_num = PROFILE_FIELDS.get('name_for_support')
@@ -376,18 +379,26 @@ def patch_profile(profile, uuid_str):
                 lite = set_first(lite, 20, device)
             r = lite
         elif n == 10:  # Resources
-            res = set_first(r, 1, 900000000, 0)
-            res = set_first(res, 2, 9000000, 0)
+            res = set_first(r, 1, coins if coins is not None else 900000000, 0)
+            res = set_first(res, 2, gems if gems is not None else 9000000, 0)
             r = res
         elif nfs_num is not None and n == nfs_num:
             r = name + b'#' + str(tag).encode()
         out.append((n, w, r))
-    return ser_fields(out)
+    res = ser_fields(out)
+    if stage is not None:
+        res = set_first(res, 12, int(stage), 0)
+    if tutorial is not None:
+        res = set_first(res, 14, int(tutorial), 0)
+    if bigfight is not None:
+        res = set_first(res, 23, int(bigfight), 0)
+    return res
 
 
 # ---------- response builder ----------
 
-def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None):
+def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
+                       player=None):
     """Replay responses in the exact order the requests were sent.
 
     Client correlates responses positionally, and protobuf lite validates
@@ -395,8 +406,16 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None):
     time_until_league_round_end(2) and has_medal_logs(3). RegisterResult
     requires all three of its fields.
     """
-    profile = patch_profile(T_PROFILE, uuid_str) if T_PROFILE else b''
-    if profile and player_name:
+    coins = player.get('coins') if player else None
+    gems = player.get('gems') if player else None
+    stage = player.get('stage') if player else None
+    tutorial = player.get('tutorial') if player else None
+    # tutorial >= 1000 считаем "туториал пройден": не подсовываем диалоги дяди Тони
+    tutorials_done = tutorial is not None and tutorial >= 1000
+    bigfight = player.get('bigfight') if player else None
+    profile = patch_profile(T_PROFILE, uuid_str, player_name, coins, gems,
+                            stage, tutorial, bigfight) if T_PROFILE else b''
+    if profile and player_name and player is None:
         profile = set_first(profile, 1, set_first(lite_and_vehicles(profile)[0], 2, player_name.encode()))
     lite, vai = lite_and_vehicles(profile) if profile else (b'', b'')
     resps = []
@@ -457,16 +476,16 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None):
             parts.append(field(40, 2, T_PROFILE_WITH_VEHICLE))
         elif req == 28 and T_PARCELS:
             parts.append(field(16, 2, T_PARCELS))
-        elif req == 79 and T_INTRO:
-            parts.append(field(29, 2, T_INTRO))
+        elif req == 79:
+            parts.append(field(29, 2, T_INTRO or b''))
         elif req == 40 and T_BIGFIGHT:
             parts.append(field(21, 2, T_BIGFIGHT))
         elif req == 10 and T_LEADERBOARD:
             parts.append(field(7, 2, T_LEADERBOARD))
         elif req == 19 and T_LBPOS:
             parts.append(field(11, 2, T_LBPOS))
-        elif req == 150 and T_TUTDIALOGS:
-            parts.append(field(62, 2, T_TUTDIALOGS))
+        elif req == 150:
+            parts.append(field(62, 2, b'' if tutorials_done else (T_TUTDIALOGS or b'')))
         elif req == 31 and T_OPPONENT:
             parts.append(field(4, 2, T_OPPONENT))
         elif req == 132 and T_NEWS is not None:
@@ -551,6 +570,57 @@ async def health(request):
     })
 
 
+async def grant_api(request):
+    """Начитка валюты: /api/grant?uuid=...&coins=99999999&gems=99999 (или &name=...)."""
+    uuid_str = request.query.get('uuid')
+    name = request.query.get('name')
+    coins = request.query.get('coins')
+    gems = request.query.get('gems')
+    conn = db()
+    try:
+        if uuid_str:
+            row = conn.execute('SELECT uuid FROM players WHERE uuid=?', (uuid_str,)).fetchone()
+        elif name:
+            row = conn.execute('SELECT uuid FROM players WHERE name=? ORDER BY last_seen DESC',
+                               (name,)).fetchone()
+        else:
+            return web.json_response({'ok': False, 'error': 'need uuid or name'}, status=400)
+        if not row:
+            return web.json_response({'ok': False, 'error': 'player not found'}, status=404)
+        uuid_str = row[0]
+        if coins is not None:
+            conn.execute('UPDATE players SET coins=? WHERE uuid=?', (int(coins), uuid_str))
+        if gems is not None:
+            conn.execute('UPDATE players SET gems=? WHERE uuid=?', (int(gems), uuid_str))
+        for key, col in (('stage', 'stage'), ('tutorial', 'tutorial'),
+                         ('bigfight', 'bigfight')):
+            val = request.query.get(key)
+            if val is not None:
+                conn.execute('UPDATE players SET %s=? WHERE uuid=?' % col,
+                             (int(val), uuid_str))
+        conn.commit()
+        p = conn.execute('SELECT uuid,name,token,coins,gems,stage,tutorial,bigfight'
+                         ' FROM players WHERE uuid=?', (uuid_str,)).fetchone()
+    finally:
+        conn.close()
+    return web.json_response({'ok': True, 'player': {
+        'uuid': p[0], 'name': p[1], 'coins': p[3], 'gems': p[4],
+        'stage': p[5], 'tutorial': p[6], 'bigfight': p[7]}})
+
+
+async def players_api(request):
+    conn = db()
+    try:
+        rows = conn.execute('SELECT uuid,name,coins,gems,last_seen,stage,tutorial,bigfight'
+                            ' FROM players ORDER BY last_seen DESC LIMIT 50').fetchall()
+    finally:
+        conn.close()
+    return web.json_response({'ok': True, 'players': [
+        {'uuid': r[0], 'name': r[1], 'coins': r[2], 'gems': r[3], 'last_seen': r[4],
+         'stage': r[5], 'tutorial': r[6], 'bigfight': r[7]}
+        for r in rows]})
+
+
 async def frames_api(request):
     return web.json_response({'stats': STATS, 'frames': list(LAST)})
 
@@ -586,6 +656,147 @@ def log_http(payload: bytes):
         pass
 
 
+# ---------- persistence ----------
+
+DB_PATH = os.environ.get('DB_PATH', os.path.join(HERE, 'cats.db'))
+
+
+def db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""CREATE TABLE IF NOT EXISTS players (
+        uuid TEXT PRIMARY KEY, name TEXT, token TEXT,
+        coins INTEGER, gems INTEGER, created INTEGER, last_seen INTEGER,
+        stage INTEGER DEFAULT 0, tutorial INTEGER DEFAULT 25,
+        bigfight INTEGER DEFAULT 0)""")
+    cols = {r[1] for r in conn.execute('PRAGMA table_info(players)')}
+    for name, ddl in (('stage', 'INTEGER DEFAULT 0'),
+                      ('tutorial', 'INTEGER DEFAULT 25'),
+                      ('bigfight', 'INTEGER DEFAULT 0')):
+        if name not in cols:
+            conn.execute('ALTER TABLE players ADD COLUMN %s %s' % (name, ddl))
+    return conn
+
+
+DEFAULT_COINS = int(os.environ.get('START_COINS', '1000'))
+DEFAULT_GEMS = int(os.environ.get('START_GEMS', '0'))
+DEFAULT_STAGE = int(os.environ.get('START_STAGE', '0'))
+DEFAULT_TUTORIAL = int(os.environ.get('START_TUTORIAL', '25'))
+
+
+def player_get(uuid_str):
+    conn = db()
+    try:
+        row = conn.execute('SELECT uuid,name,token,coins,gems,stage,tutorial,bigfight'
+                           ' FROM players WHERE uuid=?', (uuid_str,)).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return {'uuid': row[0], 'name': row[1], 'token': row[2],
+            'coins': row[3], 'gems': row[4],
+            'stage': row[5], 'tutorial': row[6], 'bigfight': row[7]}
+
+
+def player_upsert(uuid_str, name=None):
+    now = int(time.time() * 1000)
+    conn = db()
+    try:
+        row = conn.execute('SELECT uuid,name,token,coins,gems,stage,tutorial,bigfight'
+                           ' FROM players WHERE uuid=?', (uuid_str,)).fetchone()
+        if row is None:
+            nm = name or ('player' + uuid_str[:4])
+            token = uuid_str + uuid_str
+            conn.execute('INSERT INTO players(uuid,name,token,coins,gems,created,last_seen,'
+                         'stage,tutorial,bigfight) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                         (uuid_str, nm, token, DEFAULT_COINS, DEFAULT_GEMS, now, now,
+                          DEFAULT_STAGE, DEFAULT_TUTORIAL, 0))
+            row = (uuid_str, nm, token, DEFAULT_COINS, DEFAULT_GEMS,
+                   DEFAULT_STAGE, DEFAULT_TUTORIAL, 0)
+        else:
+            if name and name != row[1]:
+                conn.execute('UPDATE players SET name=? WHERE uuid=?', (name, uuid_str))
+                row = (row[0], name, row[2], row[3], row[4], row[5], row[6], row[7])
+            conn.execute('UPDATE players SET last_seen=? WHERE uuid=?', (now, uuid_str))
+        conn.commit()
+    finally:
+        conn.close()
+    return {'uuid': row[0], 'name': row[1], 'token': row[2],
+            'coins': row[3], 'gems': row[4],
+            'stage': row[5], 'tutorial': row[6], 'bigfight': row[7]}
+
+
+# ---------- общая обработка одного protobuf-кадра ----------
+
+def process_frame(frame, state):
+    STATS['frames'] += 1
+    info = parse_client_message(frame)
+    LAST.append({
+        'n': STATS['frames'], 'kind': 'pb', 'size': len(frame),
+        'requests': info['requests'], 'nonce': info['nonce'],
+        'uuid': info['uuid'], 'hex': frame[:96].hex(),
+    })
+    print('[pb %d] %s nonce=%d' % (STATS['frames'],
+          ', '.join(info['requests']) or '(empty)', info['nonce']), flush=True)
+    nums = request_numbers(frame)
+    if info['uuid']:
+        state['uuid'] = info['uuid']
+    player = player_upsert(state['uuid'], info.get('set_name'))
+    state['name'] = player['name']
+    resp = build_response_for(info['nonce'], nums, state['uuid'],
+                              info['hash'], state['name'], player)
+    print('[resp %d] requests=%s uuid=%s coins=%d out=%d' % (
+        STATS['frames'], nums, state['uuid'], player['coins'], len(resp)), flush=True)
+    return resp
+
+
+# ---------- сырой TCP (LAN-режим, без моста) ----------
+
+async def tcp_client(reader, writer):
+    peer = writer.get_extra_info('peername')
+    print('[+] tcp connect %s' % (peer,), flush=True)
+    STATS['connections'] += 1
+    buf = bytearray()
+    state = {'uuid': uuid.uuid4().hex, 'name': None}
+    try:
+        while True:
+            chunk = await reader.read(65536)
+            if not chunk:
+                break
+            buf.extend(chunk)
+            while True:
+                try:
+                    n, i = read_varint(bytes(buf), 0)
+                except Exception:
+                    break
+                if n <= 0 or len(buf) < i + n:
+                    break
+                frame = bytes(buf[i:i + n])
+                del buf[:i + n]
+                writer.write(frame_out(process_frame(frame, state), 'varint'))
+                await writer.drain()
+    except Exception as e:
+        print('[-] tcp error %s: %r' % (peer, e), flush=True)
+    finally:
+        print('[-] tcp close %s' % (peer,), flush=True)
+        try:
+            writer.close()
+        except Exception:
+            pass
+
+
+async def start_tcp():
+    port = int(os.environ.get('TCP_PORT', '8083'))
+    srv = await asyncio.start_server(tcp_client, '0.0.0.0', port)
+    print('raw game protocol on 0.0.0.0:%d' % port, flush=True)
+    async with srv:
+        await srv.serve_forever()
+
+
+async def _on_startup(app_):
+    if os.environ.get('TCP_ENABLE', '1') == '1':
+        asyncio.create_task(start_tcp())
+
+
 async def ws_handler(request):
     ws = web.WebSocketResponse(max_msg_size=8 * 1024 * 1024)
     await ws.prepare(request)
@@ -594,8 +805,7 @@ async def ws_handler(request):
     print('[+] ws connect %s' % peer, flush=True)
 
     buf = bytearray()
-    player_uuid = uuid.uuid4().hex
-    player_name = None
+    state = {'uuid': uuid.uuid4().hex, 'name': None}
 
     async for msg in ws:
         if msg.type != WSMsgType.BINARY:
@@ -631,26 +841,7 @@ async def ws_handler(request):
                 break
             frame = bytes(buf[i:i + n])
             del buf[:i + n]
-            STATS['frames'] += 1
-            info = parse_client_message(frame)
-            try:
-                LAST.append({
-                    'n': STATS['frames'], 'kind': 'pb', 'size': len(frame),
-                    'requests': info['requests'], 'nonce': info['nonce'],
-                    'uuid': info['uuid'], 'hex': frame[:96].hex(),
-                })
-            except Exception:
-                pass
-            print('[pb %d] %s nonce=%d' % (STATS['frames'],
-                  ', '.join(info['requests']) or '(empty)', info['nonce']), flush=True)
-            nums = request_numbers(frame)
-            if info['uuid']:
-                player_uuid = info['uuid']
-            if info.get('set_name'):
-                player_name = info['set_name']
-            resp = build_response_for(info['nonce'], nums, player_uuid, info['hash'], player_name)
-            print('[resp %d] requests=%s uuid=%s out=%d' % (
-                STATS['frames'], nums, player_uuid, len(resp)), flush=True)
+            resp = process_frame(frame, state)
             await ws.send_bytes(frame_out(resp, 'varint'))
 
     print('[-] ws close %s' % peer, flush=True)
@@ -662,6 +853,9 @@ def main():
     app.router.add_get('/', health)
     app.router.add_get('/ws', ws_handler)
     app.router.add_get('/api/frames', frames_api)
+    app.router.add_get('/api/grant', grant_api)
+    app.router.add_get('/api/players', players_api)
+    app.on_startup.append(_on_startup)
     port = int(os.environ.get('PORT', '8080'))
     web.run_app(app, host='0.0.0.0', port=port, print=lambda *a: print(*a, flush=True))
 
