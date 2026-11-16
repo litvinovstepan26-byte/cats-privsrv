@@ -995,6 +995,19 @@ def player_set_device(uuid_str, device_hex):
         conn.close()
 
 
+def player_set_name(uuid_str, name):
+    if not name:
+        return
+    conn = db()
+    try:
+        conn.execute('UPDATE players SET name=? WHERE uuid=?', (name, uuid_str))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        conn.close()
+
+
 def player_set_tutorial(uuid_str, value):
     conn = db()
     try:
