@@ -868,6 +868,18 @@ async def players_api(request):
         for r in rows]})
 
 
+async def raw_api(request):
+    """Последние кадры целиком (hex) — для разбора боя."""
+    out = []
+    for f in list(LAST)[-30:]:
+        out.append({
+            'n': f.get('n'), 'kind': f.get('kind'),
+            'requests': f.get('requests'), 'size': f.get('size'),
+            'hex': (f.get('hex') or '')[:4000],
+        })
+    return web.json_response({'stats': STATS, 'frames': out})
+
+
 async def frames_api(request):
     return web.json_response({'stats': STATS, 'frames': list(LAST)})
 
@@ -1101,7 +1113,7 @@ def process_frame(frame, state):
     LAST.append({
         'n': STATS['frames'], 'kind': 'pb', 'size': len(frame),
         'requests': info['requests'], 'nonce': info['nonce'],
-        'uuid': info['uuid'], 'hex': frame[:96].hex(),
+        'uuid': info['uuid'], 'hex': frame[:1500].hex(),
     })
     print('[pb %d] %s nonce=%d' % (STATS['frames'],
           ', '.join(info['requests']) or '(empty)', info['nonce']), flush=True)
@@ -1329,6 +1341,7 @@ def main():
     app.router.add_get('/', health)
     app.router.add_get('/ws', ws_handler)
     app.router.add_get('/api/frames', frames_api)
+    app.router.add_get('/api/raw', raw_api)
     app.router.add_get('/api/grant', grant_api)
     app.router.add_get('/api/players', players_api)
     app.router.add_get('/api/rename', rename_api)
