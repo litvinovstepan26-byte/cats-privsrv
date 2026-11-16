@@ -1148,6 +1148,10 @@ def process_frame(frame, state):
                 player_set_tutorial(state['uuid'], new_tut)
             player['tutorial'] = new_tut
             print('[tut] progress %d -> %d' % (cur, new_tut), flush=True)
+    _seen = []
+    for _n, _p in request_payloads(frame):
+        if _n == 150:
+            _seen = dialog_ids(_p)
     resp = build_response_for(info['nonce'], nums, state['uuid'],
                               info['hash'], state['name'], player, _seen)
     print('[resp %d] requests=%s uuid=%s coins=%d out=%d' % (
