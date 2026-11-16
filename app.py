@@ -517,7 +517,7 @@ def patch_profile(profile, uuid_str, player_name=None, coins=None, gems=None,
 # ---------- response builder ----------
 
 def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
-                       player=None):
+                       player=None, seen_dialogs=None):
     """Replay responses in the exact order the requests were sent.
 
     Client correlates responses positionally, and protobuf lite validates
@@ -623,14 +623,15 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(7, 2, T_LEADERBOARD))
         elif req == 19 and T_LBPOS:
             parts.append(field(11, 2, T_LBPOS))
-        elif req == 150:  # get_tutorial_dialogs — порциями, как настоящий сервер
+        elif req == 150:  # get_tutorial_dialogs — только ещё не виденные
             t = tutorial or 0
-            if t >= 27 and T_TUTDIALOGS_FIGHT2:
-                parts.append(field(62, 2, T_TUTDIALOGS_FIGHT2))
-            elif t >= 26 and T_TUTDIALOGS_FIGHT:
-                parts.append(field(62, 2, T_TUTDIALOGS_FIGHT))
+            if t >= 27:
+                src = T_TUTDIALOGS_FIGHT2
+            elif t >= 26:
+                src = T_TUTDIALOGS_FIGHT
             else:
-                parts.append(field(62, 2, T_TUTDIALOGS or b''))
+                src = T_TUTDIALOGS
+            parts.append(field(62, 2, filter_dialogs(src or b'', seen_dialogs)))
         elif req == 154:  # get_tutorial_championship -> список соперников туториала
             parts.append(field(29, 2, T_INTRO or b''))
         elif req == 155:  # get_tutorial_championship_opponent
@@ -673,6 +674,55 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
 def build_response(nonce):
     resp = field(1000, 0, nonce)
     return field(1, 2, resp) + field(2, 0, int(time.time() * 1000))
+
+
+def dialog_ids(payload):
+    """id диалогов из запроса/ответа TutorialDialogs (repeated field 1 {1: id})."""
+    ids = []
+    try:
+        for n, w, v in parse_fields(payload):
+            if n == 1 and isinstance(v, bytes):
+                try:
+                    sub = parse_fields(v)
+                except Exception:
+                    sub = []
+                got = False
+                for a, b, c in sub:
+                    if a == 1 and isinstance(c, bytes):
+                        ids.append(c.decode('utf-8', 'replace'))
+                        got = True
+                if not got:
+                    # в запросе id может лежать строкой прямо в поле 1
+                    txt = v.decode('utf-8', 'replace')
+                    if txt.isprintable() and len(txt) < 64:
+                        ids.append(txt)
+    except Exception:
+        pass
+    return ids
+
+
+def dialog_entries(payload):
+    """[(id, raw_entry)] для каждого диалога в TutorialDialogs."""
+    out = []
+    try:
+        for n, w, v in parse_fields(payload):
+            if n == 1 and isinstance(v, bytes):
+                did = ''
+                for a, b, c in parse_fields(v):
+                    if a == 1 and isinstance(c, bytes):
+                        did = c.decode('utf-8', 'replace')
+                out.append((did, v))
+    except Exception:
+        pass
+    return out
+
+
+def filter_dialogs(payload, seen):
+    if not payload:
+        return b''
+    seen = set(seen or [])
+    keep = [raw for did, raw in dialog_entries(payload) if did not in seen]
+    return b''.join(field(1, 2, raw) for raw in keep)
 
 
 def frame_response(resp):
@@ -1099,7 +1149,7 @@ def process_frame(frame, state):
             player['tutorial'] = new_tut
             print('[tut] progress %d -> %d' % (cur, new_tut), flush=True)
     resp = build_response_for(info['nonce'], nums, state['uuid'],
-                              info['hash'], state['name'], player)
+                              info['hash'], state['name'], player, _seen)
     print('[resp %d] requests=%s uuid=%s coins=%d out=%d' % (
         STATS['frames'], nums, state['uuid'], player['coins'], len(resp)), flush=True)
     # ВАЖНО: никаких «пушей» вне ответа — клиент на неожиданный кадр рвёт
