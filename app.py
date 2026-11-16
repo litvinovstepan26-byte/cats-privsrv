@@ -297,7 +297,12 @@ T_MISSIONS = load_captured('missions.bin')
 T_BOX = load_captured('box_display_result.bin') or b''
 T_VAI = load_captured('vehicles_and_inventory.bin') or b''
 T_BET = load_captured('bet_fights.bin') or b''
+T_GLOBAL_LB = load_captured('global_leaderboard.bin') or b''
+T_BOX = load_captured('box_display_result.bin') or b''
+T_VAI = load_captured('vehicles_and_inventory.bin') or b''
+T_BET = load_captured('bet_fights.bin') or b''
 T_GLB = load_captured('global_leaderboard.bin') or b''
+T_GROOVY = load_captured('groovy_thrust_inventory.bin')
 
 try:
     CONFIG_META = json.load(open(os.path.join(CAPTURED, 'config_meta.json')))
@@ -410,10 +415,15 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None):
             parts.append(body)
         elif req == 163 and T_BOX:  # get_box_display
             parts.append(field(66, 2, T_BOX))
-        elif req == 23 and T_BET:  # bet_fights
+        elif req in (32, 49, 159, 160):  # setters: complete_tutorial_step /
+            # update_client_preferences / start_tutorial_step / set_locale
+            parts.append(field(26, 2, b''))  # Response.no_change
+        elif req == 44 and T_BET:  # get_bet_fights -> Response.bet_fights(23)
             parts.append(field(23, 2, T_BET))
-        elif req == 18 and T_GLB:  # global_leaderboard
+        elif req == 35 and T_GLB:  # get_global_leaderboard -> Response(18)
             parts.append(field(18, 2, T_GLB))
+        elif req == 214 and T_GROOVY is not None:  # get_groovy_thrust_boosters
+            parts.append(field(96, 2, T_GROOVY))
         elif req == 101 and T_PROFILE_WITH_VEHICLE:
             parts.append(field(40, 2, T_PROFILE_WITH_VEHICLE))
         elif req == 28 and T_PARCELS:
@@ -484,6 +494,16 @@ def frame_out(payload, kind):
 # ---------- http ----------
 
 async def health(request):
+    # Игра стучится в балансер как GET /?version=99&uuid=...&host=
+    # Отдаём тот же JSON, что и мост, но по обычному HTTP (без TLS и без моста).
+    if 'version' in request.query:
+        return web.json_response({
+            'status': 'OK',
+            'instance': {
+                'host': os.environ.get('GAME_HOST', '127.0.0.1'),
+                'port': int(os.environ.get('GAME_PORT', '7711')),
+            },
+        })
     return web.json_response({
         'ok': True, 'schema': len(SCHEMA), 'stats': STATS,
         'templates': {
