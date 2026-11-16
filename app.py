@@ -582,9 +582,11 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
                 parts.append(field(25, 2, base))
         elif req == 98 and lite:
             parts.append(field(38, 2, lite))
-        elif req == 37:  # set_name -> updated ProfileLite
-            if player_name and lite:
-                parts.append(field(38, 2, set_first(lite, 2, player_name.encode())))
+        elif req == 37:  # set_name -> полный профиль с новым именем
+            # настоящий сервер отвечает my_profile(6), а не profile_lite:
+            # клиент берёт имя именно оттуда, иначе остаётся playerXXXX
+            if profile:
+                parts.append(field(6, 2, profile))
             elif lite:
                 parts.append(field(38, 2, lite))
         elif req == 181 and T_LIVE_CONFIG:  # get_live_config
@@ -1111,14 +1113,39 @@ def process_frame(frame, state):
         # быть мусором — иначе int(uuid,16) роняет весь обработчик
         if len(_cand) == 32 and all(c in '0123456789abcdefABCDEF' for c in _cand):
             state['uuid'] = _cand
+    _typed_name = info.get('set_name')
+    if not _typed_name:
+        for _n, _p in request_payloads(frame):
+            if _n != 37:
+                continue
+            _i = 0
+            try:
+                while _i < len(_p):
+                    _tag, _i = read_varint(_p, _i)
+                    _fn, _fw = _tag >> 3, _tag & 7
+                    if _fw == 0:
+                        _, _i = read_varint(_p, _i)
+                    elif _fw == 2:
+                        _ln, _i = read_varint(_p, _i)
+                        _chunk = _p[_i:_i + _ln]
+                        _i += _ln
+                        if _fn == 1:
+                            _typed_name = _chunk.decode('utf-8', 'replace').strip()
+            except Exception:
+                pass
+    if _typed_name:
+        print('[name] typed=%r' % _typed_name, flush=True)
     try:
-        player = player_upsert(state['uuid'], info.get('set_name'))
+        player = player_upsert(state['uuid'], _typed_name)
     except Exception as e:
         print('[-] db error: %r' % (e,), flush=True)
-        player = {'uuid': state['uuid'], 'name': info.get('set_name') or 'player',
+        player = {'uuid': state['uuid'], 'name': _typed_name or 'player',
                   'token': state['uuid'] * 2, 'coins': DEFAULT_COINS,
                   'gems': DEFAULT_GEMS, 'stage': 0, 'tutorial': DEFAULT_TUTORIAL,
                   'bigfight': 0}
+    if _typed_name:
+        player_set_name(state['uuid'], _typed_name)
+        player['name'] = _typed_name
     state['name'] = player['name']
     if device:
         player_set_device(state['uuid'], device)
