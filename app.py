@@ -647,6 +647,22 @@ def build_response(nonce):
     return field(1, 2, resp) + field(2, 0, int(time.time() * 1000))
 
 
+def frame_response(resp):
+    """Список payload'ов для отправки: по одному Response на ServerMessage."""
+    if os.environ.get('SPLIT_RESPONSES', '1') != '1':
+        return [resp]
+    try:
+        fields = parse_fields(resp)
+    except Exception:
+        return [resp]
+    st = [v for n, w, v in fields if n == 2 and not isinstance(v, bytes)]
+    now = st[0] if st else int(time.time() * 1000)
+    resps = [v for n, w, v in fields if n == 1 and isinstance(v, bytes)]
+    if len(resps) <= 1:
+        return [resp]
+    return [field(1, 2, r) + field(2, 0, now) for r in resps]
+
+
 def split_frame(buf):
     try:
         ln, i = read_varint(buf, 0)
@@ -1028,9 +1044,14 @@ def process_frame(frame, state):
         except Exception:
             pass
         if _step is not None:
-            player_set_tutorial(state['uuid'], min(2000, int(_step)))
-            player['tutorial'] = min(2000, int(_step))
-            print('[tut] progress -> %d' % player['tutorial'], flush=True)
+            # только вперёд: клиент при переподключении повторяет прошлые шаги,
+            # и если писать step как есть, прогресс откатывается назад
+            cur = int(player.get('tutorial') or 0)
+            new_tut = max(cur, min(2000, int(_step)))
+            if new_tut != cur:
+                player_set_tutorial(state['uuid'], new_tut)
+            player['tutorial'] = new_tut
+            print('[tut] progress %d -> %d' % (cur, new_tut), flush=True)
     resp = build_response_for(info['nonce'], nums, state['uuid'],
                               info['hash'], state['name'], player)
     print('[resp %d] requests=%s uuid=%s coins=%d out=%d' % (
@@ -1061,7 +1082,8 @@ async def tcp_client(reader, writer):
                     break
                 frame = bytes(buf[i:i + n])
                 del buf[:i + n]
-                writer.write(frame_out(process_frame(frame, state), 'varint'))
+                for _p in frame_response(process_frame(frame, state)):
+                    writer.write(frame_out(_p, 'varint'))
                 await writer.drain()
     except Exception as e:
         print('[-] tcp error %s: %r' % (peer, e), flush=True)
@@ -1131,7 +1153,8 @@ async def ws_handler(request):
             frame = bytes(buf[i:i + n])
             del buf[:i + n]
             resp = process_frame(frame, state)
-            await ws.send_bytes(frame_out(resp, 'varint'))
+            for _p in frame_response(resp):
+                await ws.send_bytes(frame_out(_p, 'varint'))
 
     print('[-] ws close %s' % peer, flush=True)
     return ws
