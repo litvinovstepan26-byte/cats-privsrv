@@ -422,8 +422,8 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None):
             parts.append(field(23, 2, T_BET))
         elif req == 35 and T_GLB:  # get_global_leaderboard -> Response(18)
             parts.append(field(18, 2, T_GLB))
-        elif req == 214 and T_GROOVY is not None:  # get_groovy_thrust_boosters
-            parts.append(field(96, 2, T_GROOVY))
+        elif req == 214:  # get_groovy_thrust_boosters — отвечаем всегда, пусть и пустым
+            parts.append(field(96, 2, T_GROOVY or b''))
         elif req == 101 and T_PROFILE_WITH_VEHICLE:
             parts.append(field(40, 2, T_PROFILE_WITH_VEHICLE))
         elif req == 28 and T_PARCELS:
