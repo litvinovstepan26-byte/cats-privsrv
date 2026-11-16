@@ -646,14 +646,16 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(11, 2, T_LBPOS))
         elif req == 150:  # get_tutorial_dialogs — только ещё не виденные
             t = tutorial or 0
+            # Как настоящий сервер: вступление — при первом запросе диалогов,
+            # реплика перед боем — при следующем (после установки детали).
+            seen_n = int(state.get('dlg_count') or 0)
+            state['dlg_count'] = seen_n + 1
             if t >= 27:
                 src = T_TUTDIALOGS_FIGHT2
             elif t >= 26:
-                # клиент мог ещё не показать вступление (кэш чистится на старте),
-                # поэтому отдаём обе порции: repeated-поля просто склеиваются
-                src = (T_TUTDIALOGS or b'') + (T_TUTDIALOGS_FIGHT or b'')
+                src = T_TUTDIALOGS_FIGHT if seen_n > 0 else T_TUTDIALOGS
             else:
-                src = T_TUTDIALOGS
+                src = T_TUTDIALOGS if seen_n == 0 else b''
             # ВАЖНО: не фильтруем по «просмотренным» — клиент хранит этот список
             # локально и после сброса БД считает вступление уже показанным,
             # из-за чего туториал молча пропускается.
