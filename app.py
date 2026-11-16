@@ -1151,6 +1151,24 @@ def process_frame(frame, state):
         # быть мусором — иначе int(uuid,16) роняет весь обработчик
         if len(_cand) == 32 and all(c in '0123456789abcdefABCDEF' for c in _cand):
             state['uuid'] = _cand
+    if 4 in nums:
+        # Один игрок на сервер: при register_ всегда возвращаем существующий
+        # аккаунт. Иначе после переустановки APK (меняется device id) создаётся
+        # новый игрок и прогресс «теряется».
+        _known = player_by_device(device) if device else None
+        if not _known:
+            _conn = db()
+            try:
+                _row = _conn.execute('SELECT uuid,name,token,coins,gems,stage,tutorial,bigfight'
+                                     ' FROM players ORDER BY last_seen DESC LIMIT 1').fetchone()
+            finally:
+                _conn.close()
+            if _row:
+                _known = {'uuid': _row[0], 'name': _row[1], 'token': _row[2], 'coins': _row[3],
+                          'gems': _row[4], 'stage': _row[5], 'tutorial': _row[6], 'bigfight': _row[7]}
+        if _known:
+            state['uuid'] = _known['uuid']
+            print('[reg] reuse account %s' % state['uuid'], flush=True)
     _typed_name = info.get('set_name')
     if not _typed_name:
         for _n, _p in request_payloads(frame):
