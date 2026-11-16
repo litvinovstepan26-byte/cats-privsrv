@@ -558,8 +558,19 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(6, 2, profile))
             if LIVE_CONFIG_HASH:
                 parts.append(field(1002, 2, LIVE_CONFIG_HASH.encode()))
-        elif req in (15, 17):  # install/uninstall_vehicle_part -> безопасный ack
-            parts.append(field(26, 2, b''))
+        elif req in (15, 17):  # install/uninstall_vehicle_part
+            mode = INSTALL_MODE
+            if mode == 'vai':
+                parts.append(field(25, 2, T_VAI or vai or b''))
+            elif mode == 'profile' and profile:
+                parts.append(field(6, 2, profile))
+            elif mode == 'both' and profile:
+                body = field(6, 2, profile)
+                if T_VAI or vai:
+                    body += field(25, 2, T_VAI or vai)
+                parts.append(body)
+            else:
+                parts.append(field(26, 2, b''))
         elif req == 48:
             base = T_VAI or vai
             if base:
@@ -878,6 +889,7 @@ def db():
 DEFAULT_COINS = int(os.environ.get('START_COINS', '1000'))
 DEFAULT_GEMS = int(os.environ.get('START_GEMS', '0'))
 DEFAULT_STAGE = int(os.environ.get('START_STAGE', '0'))
+INSTALL_MODE = os.environ.get('INSTALL_MODE', 'ack')
 DEFAULT_TUTORIAL = int(os.environ.get('START_TUTORIAL', '25'))
 
 
