@@ -418,12 +418,13 @@ def _replace_field(buf, num, newval, wire=2):
     return ser_fields(out)
 
 
-def vai_with_part(vai, template_id=4):
-    """Добавить в шасси деталь с нужным template_id (4 = Gun #001).
+def vai_with_part(vai, template_id=4, drop_stash=True):
+    """Поставить деталь в шасси (и убрать её из «стойки»).
 
-    Структура (проверена по дампу):
+    Структура (по дампу):
       normal_garage(1) -> garage(1) -> vehicle(2) -> container(1) -> chassis(2)
-      шасси: поле 4 (repeated) = установленные детали {6: template_id, 7: pos, 8: ids, 9, 12}
+      шасси: поле 4 (repeated) = {6: template_id, 7: позиция, 8: ids, 9, 12}
+      стойка: normal_garage(1) -> поле 3
     """
     try:
         garage = [v for n, w, v in parse_fields(vai) if n == 1 and isinstance(v, bytes)][0]
@@ -434,20 +435,23 @@ def vai_with_part(vai, template_id=4):
         entries = [v for n, w, v in parse_fields(chassis) if n == 4 and isinstance(v, bytes)]
         if not entries:
             return vai
-        tpl = entries[-1]
         new_fields = []
-        for n, w, v in parse_fields(tpl):
-            if n == 6:
-                new_fields.append((n, 0, template_id))
-            else:
-                new_fields.append((n, w, v))
-        entry = ser_fields(new_fields)
-        chassis2 = chassis + field(4, 2, entry)
+        for n, w, v in parse_fields(entries[-1]):
+            new_fields.append((n, 0, template_id) if n == 6 else (n, w, v))
+        chassis2 = chassis + field(4, 2, ser_fields(new_fields))
         cont2 = _replace_field(cont, 2, chassis2)
         g2b = _replace_field(g2, 1, cont2)
         g1b = _replace_field(g1, 2, g2b)
-        garage2 = _replace_field(garage, 1, g1b)
-        return _replace_field(vai, 1, garage2)
+
+        garage_out = []
+        for n, w, v in parse_fields(garage):
+            if n == 1:
+                garage_out.append((n, w, g1b))
+            elif n == 3 and drop_stash:
+                continue
+            else:
+                garage_out.append((n, w, v))
+        return _replace_field(vai, 1, ser_fields(garage_out))
     except Exception as e:
         print('[-] vai_with_part: %r' % (e,), flush=True)
         return vai
