@@ -890,10 +890,24 @@ def player_upsert(uuid_str, name=None):
         if row is None:
             nm = name or ('player' + uuid_str[:4])
             token = uuid_str + uuid_str
+            # Переустановка APK меняет device id, поэтому новый игрок наследует
+            # прогресс самого «богатого» — иначе туториал и валюта откатываются.
+            inherit = None
+            try:
+                inherit = conn.execute(
+                    'SELECT coins,gems,stage,tutorial,bigfight FROM players'
+                    ' ORDER BY coins DESC, last_seen DESC LIMIT 1').fetchone()
+            except Exception:
+                pass
+            if inherit and (inherit[0] or 0) > DEFAULT_COINS:
+                coins, gems, stage_id, tut, bf = inherit
+            else:
+                coins, gems, stage_id, tut, bf = (DEFAULT_COINS, DEFAULT_GEMS,
+                                                  DEFAULT_STAGE, DEFAULT_TUTORIAL, 0)
             conn.execute('INSERT INTO players(uuid,name,token,coins,gems,created,last_seen,'
                          'stage,tutorial,bigfight) VALUES(?,?,?,?,?,?,?,?,?,?)',
-                         (uuid_str, nm, token, DEFAULT_COINS, DEFAULT_GEMS, now, now,
-                          DEFAULT_STAGE, DEFAULT_TUTORIAL, 0))
+                         (uuid_str, nm, token, coins, gems, now, now,
+                          stage_id, tut, bf))
             row = (uuid_str, nm, token, DEFAULT_COINS, DEFAULT_GEMS,
                    DEFAULT_STAGE, DEFAULT_TUTORIAL, 0)
         else:
