@@ -834,6 +834,27 @@ async def grant_api(request):
         'stage': p[5], 'tutorial': p[6], 'bigfight': p[7]}})
 
 
+async def rename_api(request):
+    """Сменить ник: /api/rename?uuid=...&name=НовыйНик"""
+    uuid_str = request.query.get('uuid')
+    name = request.query.get('name')
+    if not name:
+        return web.json_response({'ok': False, 'error': 'need name'}, status=400)
+    conn = db()
+    try:
+        if not uuid_str:
+            row = conn.execute('SELECT uuid FROM players ORDER BY last_seen DESC LIMIT 1').fetchone()
+            if not row:
+                return web.json_response({'ok': False, 'error': 'no players'}, status=404)
+            uuid_str = row[0]
+        conn.execute('UPDATE players SET name=? WHERE uuid=?', (name, uuid_str))
+        conn.commit()
+        p = conn.execute('SELECT uuid,name FROM players WHERE uuid=?', (uuid_str,)).fetchone()
+    finally:
+        conn.close()
+    return web.json_response({'ok': True, 'uuid': p[0], 'name': p[1]})
+
+
 async def players_api(request):
     conn = db()
     try:
@@ -1310,6 +1331,7 @@ def main():
     app.router.add_get('/api/frames', frames_api)
     app.router.add_get('/api/grant', grant_api)
     app.router.add_get('/api/players', players_api)
+    app.router.add_get('/api/rename', rename_api)
     app.on_startup.append(_on_startup)
     port = int(os.environ.get('PORT', '8080'))
     web.run_app(app, host='0.0.0.0', port=port, print=lambda *a: print(*a, flush=True))
