@@ -633,7 +633,10 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
                 src = T_TUTDIALOGS_FIGHT
             else:
                 src = T_TUTDIALOGS
-            parts.append(field(62, 2, filter_dialogs(src or b'', seen_dialogs)))
+            # ВАЖНО: не фильтруем по «просмотренным» — клиент хранит этот список
+            # локально и после сброса БД считает вступление уже показанным,
+            # из-за чего туториал молча пропускается.
+            parts.append(field(62, 2, src or b''))
         elif req == 154:  # get_tutorial_championship -> список соперников туториала
             parts.append(field(29, 2, T_INTRO or b''))
         elif req == 155:  # get_tutorial_championship_opponent
