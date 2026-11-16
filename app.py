@@ -21,6 +21,7 @@ import json
 import os
 import struct
 import sys
+import uuid
 
 from aiohttp import web, WSMsgType
 
