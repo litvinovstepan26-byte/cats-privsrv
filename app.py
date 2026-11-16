@@ -882,6 +882,18 @@ async def raw_api(request):
     return web.json_response({'stats': STATS, 'frames': out})
 
 
+async def raw_api(request):
+    """Последние кадры целиком (hex) — для разбора боя."""
+    out = []
+    for f in list(LAST)[-30:]:
+        out.append({
+            'n': f.get('n'), 'kind': f.get('kind'),
+            'requests': f.get('requests'), 'size': f.get('size'),
+            'hex': (f.get('hex') or '')[:4000],
+        })
+    return web.json_response({'stats': STATS, 'frames': out})
+
+
 async def frames_api(request):
     return web.json_response({'stats': STATS, 'frames': list(LAST)})
 
@@ -1235,6 +1247,7 @@ def process_frame(frame, state):
     for _n, _p in request_payloads(frame):
         if _n == 150:
             _seen = dialog_ids(_p)
+            print('[dialogs] seen=%r' % (_seen,), flush=True)
     resp = build_response_for(info['nonce'], nums, state['uuid'],
                               info['hash'], state['name'], player, _seen)
     print('[resp %d] requests=%s uuid=%s coins=%d out=%d' % (
@@ -1361,6 +1374,7 @@ def main():
     app.router.add_get('/', health)
     app.router.add_get('/ws', ws_handler)
     app.router.add_get('/api/frames', frames_api)
+    app.router.add_get('/api/raw', raw_api)
     app.router.add_get('/api/raw', raw_api)
     app.router.add_get('/api/grant', grant_api)
     app.router.add_get('/api/players', players_api)
