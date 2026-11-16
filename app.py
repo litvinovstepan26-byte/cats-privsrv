@@ -558,14 +558,12 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(6, 2, profile))
             if LIVE_CONFIG_HASH:
                 parts.append(field(1002, 2, LIVE_CONFIG_HASH.encode()))
-        elif req == 15:  # install_vehicle_part -> гараж с установленной деталью
-            parts.append(field(25, 2, vai_with_part(T_VAI or vai or b'')))
-        elif req == 17:  # uninstall_vehicle_part -> базовый гараж
-            parts.append(field(25, 2, T_VAI or vai or b''))
+        elif req in (15, 17):  # install/uninstall_vehicle_part -> безопасный ack
+            parts.append(field(26, 2, b''))
         elif req == 48:
             base = T_VAI or vai
             if base:
-                parts.append(field(25, 2, vai_with_part(base)))
+                parts.append(field(25, 2, base))
         elif req == 98 and lite:
             parts.append(field(38, 2, lite))
         elif req == 37:  # set_name -> updated ProfileLite
