@@ -382,6 +382,7 @@ T_INTRO = load_captured('intro_fight_opponents.bin') or b''
 T_BIGFIGHT = load_captured('big_fight_data.bin') or b''
 T_BIGFIGHT2 = load_captured('big_fight_data2.bin') or b''
 T_MATCH_RESULT = load_captured('match_result.bin') or b''
+T_OPPONENT_TUT = load_captured('opponent_tutorial.bin') or b''
 T_LEADERBOARD = load_captured('leaderboard.bin') or b''
 T_LBPOS = load_captured('leaderboard_position.bin') or b''
 T_TUTDIALOGS = load_captured('tutorial_dialogs.bin') or b''
@@ -669,8 +670,8 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(4, 2, T_OPPONENT))
         elif req == 156:  # start_tutorial_big_fight -> сразу даём соперника
             parts.append(field(4, 2, T_OPPONENT or b''))
-        elif req == 8:  # start_match -> соперник (как в эталоне: leaderboard + opponent)
-            parts.append(field(4, 2, T_OPPONENT or b''))
+        elif req == 8:  # start_match -> соперник туториала (из эталона боя)
+            parts.append(field(4, 2, T_OPPONENT_TUT or T_OPPONENT or b''))
         elif req == 40:  # start_big_fight -> данные боя
             parts.append(field(21, 2, T_BIGFIGHT2 or T_BIGFIGHT))
         elif req in (9, 41, 157):  # результат боя -> Response.match_result(8)
