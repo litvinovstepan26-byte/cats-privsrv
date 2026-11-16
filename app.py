@@ -473,7 +473,10 @@ def lite_and_vehicles(profile):
 def patch_profile(profile, uuid_str, player_name=None, coins=None, gems=None,
                   stage=None, tutorial=None, bigfight=None):
     """Real profile with substituted uuid / name / tag / device / currency."""
-    raw_uuid = bytes.fromhex(uuid_str) if len(uuid_str) == 32 else uuid_str.encode()[:16]
+    try:
+        raw_uuid = bytes.fromhex(uuid_str) if len(uuid_str) == 32 else uuid_str.encode()[:16]
+    except ValueError:
+        raw_uuid = uuid_str.encode()[:16].ljust(16, b'\0')
     raw_uuid = raw_uuid[:16].ljust(16, b'\0')
     name = (player_name or ('player' + uuid_str[:4])).encode()
     tag = int(uuid_str[:6], 16) % 100000
@@ -619,8 +622,12 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
         elif req == 19 and T_LBPOS:
             parts.append(field(11, 2, T_LBPOS))
         elif req == 150:
-            parts.append(field(62, 2, b'' if tutorials_done else (T_TUTDIALOGS or b'')))
-        elif req in (5, 6, 31, 154, 155) and T_OPPONENT:  # find_league/bot/champ/tutorial
+            parts.append(field(62, 2, b''))
+        elif req == 154:  # get_tutorial_championship -> список соперников туториала
+            parts.append(field(29, 2, T_INTRO or b''))
+        elif req == 155:  # get_tutorial_championship_opponent
+            parts.append(field(4, 2, T_OPPONENT or b''))
+        elif req in (5, 6, 31) and T_OPPONENT:  # find_league/bot/championship
             parts.append(field(4, 2, T_OPPONENT))
         elif req == 156:  # start_tutorial_big_fight -> сразу даём соперника
             parts.append(field(4, 2, T_OPPONENT or b''))
@@ -1028,7 +1035,11 @@ def process_frame(frame, state):
         if _num in (15, 17, 32, 159, 154, 156, 157, 158):
             print('[tut] req %d payload=%s' % (_num, _payload.hex()), flush=True)
     if info['uuid']:
-        state['uuid'] = info['uuid']
+        _cand = info['uuid'].strip()
+        # uuid приходит как 32 hex-символа; в «служебных» кадрах поле 1 может
+        # быть мусором — иначе int(uuid,16) роняет весь обработчик
+        if len(_cand) == 32 and all(c in '0123456789abcdefABCDEF' for c in _cand):
+            state['uuid'] = _cand
     try:
         player = player_upsert(state['uuid'], info.get('set_name'))
     except Exception as e:
@@ -1070,7 +1081,14 @@ def process_frame(frame, state):
                               info['hash'], state['name'], player)
     print('[resp %d] requests=%s uuid=%s coins=%d out=%d' % (
         STATS['frames'], nums, state['uuid'], player['coins'], len(resp)), flush=True)
-    return resp
+    out = [resp]
+    if 15 in nums and T_OPPONENT:
+        # настоящий сервер после установки детали сам присылает соперника —
+        # с этого начинается туториальный бой
+        push = field(1, 2, field(4, 2, T_OPPONENT)) + field(2, 0, int(time.time() * 1000))
+        out.append(push)
+        print('[push] opponent after install', flush=True)
+    return out
 
 
 # ---------- сырой TCP (LAN-режим, без моста) ----------
@@ -1096,8 +1114,9 @@ async def tcp_client(reader, writer):
                     break
                 frame = bytes(buf[i:i + n])
                 del buf[:i + n]
-                for _p in frame_response(process_frame(frame, state)):
-                    writer.write(frame_out(_p, 'varint'))
+                for _one in process_frame(frame, state):
+                    for _p in frame_response(_one):
+                        writer.write(frame_out(_p, 'varint'))
                 await writer.drain()
     except Exception as e:
         print('[-] tcp error %s: %r' % (peer, e), flush=True)
@@ -1166,9 +1185,9 @@ async def ws_handler(request):
                 break
             frame = bytes(buf[i:i + n])
             del buf[:i + n]
-            resp = process_frame(frame, state)
-            for _p in frame_response(resp):
-                await ws.send_bytes(frame_out(_p, 'varint'))
+            for _one in process_frame(frame, state):
+                for _p in frame_response(_one):
+                    await ws.send_bytes(frame_out(_p, 'varint'))
 
     print('[-] ws close %s' % peer, flush=True)
     return ws
