@@ -141,13 +141,42 @@ def load_schema():
 SCHEMA = load_schema()
 REQ = {}
 PROFILE_FIELDS = {}
+RESP = {}
 if SCHEMA:
     for cls, ent in SCHEMA.items():
         short = cls.split('::')[-1]
         if short == 'ClientMessage_Request':
             REQ = {m['number']: name for name, m in ent.get('fields', {}).items()}
+        if short == 'ServerMessage_Response':
+            RESP = {name: m['number'] for name, m in ent.get('fields', {}).items()}
         if short == 'Profile':
             PROFILE_FIELDS = {name: m['number'] for name, m in ent.get('fields', {}).items()}
+
+
+def _norm(s):
+    return (s.replace('get_', '')
+             .replace('_response', '')
+             .replace('_result', '')
+             .replace('_request', ''))
+
+
+RESP_NORM = {}
+for _name, _num in RESP.items():
+    RESP_NORM.setdefault(_norm(_name), _num)
+
+
+def guess_response_field(req_num):
+    """По имени запроса найти поле ответа (когда явного шаблона нет)."""
+    name = REQ.get(req_num)
+    if not name:
+        return None
+    key = _norm(name)
+    if key in RESP_NORM:
+        return RESP_NORM[key]
+    for rn, num in RESP_NORM.items():
+        if key and (key in rn or rn in key):
+            return num
+    return None
 
 
 def describe_request(payload):
@@ -454,7 +483,15 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None):
     for req in req_nums:
         if req == 1:  # ClientMessage_Request.continue_on_error
             continue
+        before = len(resps)
         add(req)
+        if len(resps) == before:
+            # Явного шаблона нет. Пустой ответ нужного типа ломает парсер, если
+            # в сообщении есть required-поля (клиент показывает сбой 1000).
+            # Поэтому отвечаем универсальным Response.no_change(26).
+            resps.append(field(26, 2, b''))
+            print('[resp] unhandled req %d (%s) -> no_change' %
+                  (req, REQ.get(req, '?')), flush=True)
 
     return b''.join(field(1, 2, r) for r in resps) + field(2, 0, int(time.time() * 1000))
 
