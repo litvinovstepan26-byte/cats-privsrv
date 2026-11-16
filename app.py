@@ -486,8 +486,12 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(11, 2, T_LBPOS))
         elif req == 150:
             parts.append(field(62, 2, b'' if tutorials_done else (T_TUTDIALOGS or b'')))
-        elif req == 31 and T_OPPONENT:
+        elif req in (5, 6, 31, 155) and T_OPPONENT:  # find_league/bot/champ/tutorial
             parts.append(field(4, 2, T_OPPONENT))
+        elif req in (8, 40, 156) and T_BIGFIGHT:  # start_match / big fight / tutorial fight
+            parts.append(field(21, 2, T_BIGFIGHT))
+        elif req in (9, 41, 157):  # save match / big fight / tutorial fight result
+            parts.append(field(22, 2, b''))
         elif req == 132 and T_NEWS is not None:
             parts.append(field(55, 2, T_NEWS))
         elif req == 218 and T_POPUPLP is not None:
@@ -659,9 +663,45 @@ def log_http(payload: bytes):
 # ---------- persistence ----------
 
 DB_PATH = os.environ.get('DB_PATH', os.path.join(HERE, 'cats.db'))
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
+
+
+class PgConn:
+    """Обёртка, чтобы код с sqlite-плейсхолдерами работал и на Postgres."""
+
+    def __init__(self, dsn):
+        import psycopg2
+        self._c = psycopg2.connect(dsn)
+
+    def execute(self, sql, args=()):
+        cur = self._c.cursor()
+        cur.execute(sql.replace('?', '%s'), args)
+        return cur
+
+    def commit(self):
+        self._c.commit()
+
+    def close(self):
+        self._c.close()
 
 
 def db():
+    if DATABASE_URL:
+        conn = PgConn(DATABASE_URL)
+        conn.execute("""CREATE TABLE IF NOT EXISTS players (
+            uuid TEXT PRIMARY KEY, name TEXT, token TEXT,
+            coins INTEGER, gems INTEGER, created BIGINT, last_seen BIGINT,
+            stage INTEGER DEFAULT 0, tutorial INTEGER DEFAULT 25,
+            bigfight INTEGER DEFAULT 0)""")
+        for name, ddl in (('stage', 'INTEGER DEFAULT 0'),
+                          ('tutorial', 'INTEGER DEFAULT 25'),
+                          ('bigfight', 'INTEGER DEFAULT 0')):
+            try:
+                conn.execute('ALTER TABLE players ADD COLUMN %s %s' % (name, ddl))
+            except Exception:
+                pass
+        conn.commit()
+        return conn
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""CREATE TABLE IF NOT EXISTS players (
         uuid TEXT PRIMARY KEY, name TEXT, token TEXT,
