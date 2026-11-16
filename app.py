@@ -729,7 +729,16 @@ def log_http(payload: bytes):
 # ---------- persistence ----------
 
 DB_PATH = os.environ.get('DB_PATH', os.path.join(HERE, 'cats.db'))
-DATABASE_URL = os.environ.get('DATABASE_URL', '')
+
+
+def _clean_dsn(value):
+    v = (value or '').strip()
+    while len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+        v = v[1:-1].strip()
+    return v
+
+
+DATABASE_URL = _clean_dsn(os.environ.get('DATABASE_URL', ''))
 
 
 class PgConn:
@@ -866,7 +875,14 @@ def process_frame(frame, state):
             print('[tut] req %d payload=%s' % (_num, _payload.hex()), flush=True)
     if info['uuid']:
         state['uuid'] = info['uuid']
-    player = player_upsert(state['uuid'], info.get('set_name'))
+    try:
+        player = player_upsert(state['uuid'], info.get('set_name'))
+    except Exception as e:
+        print('[-] db error: %r' % (e,), flush=True)
+        player = {'uuid': state['uuid'], 'name': info.get('set_name') or 'player',
+                  'token': state['uuid'] * 2, 'coins': DEFAULT_COINS,
+                  'gems': DEFAULT_GEMS, 'stage': 0, 'tutorial': DEFAULT_TUTORIAL,
+                  'bigfight': 0}
     state['name'] = player['name']
     # complete_tutorial_step{ step=1 } -> tutorial_progress = step
     # (в профиле реального игрока tutorial_progress=25, а клиент присылает 0x1a=26)
