@@ -622,7 +622,9 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(62, 2, b'' if tutorials_done else (T_TUTDIALOGS or b'')))
         elif req in (5, 6, 31, 154, 155) and T_OPPONENT:  # find_league/bot/champ/tutorial
             parts.append(field(4, 2, T_OPPONENT))
-        elif req in (8, 40, 156) and T_BIGFIGHT:  # start_match / big fight / tutorial fight
+        elif req == 156:  # start_tutorial_big_fight -> сразу даём соперника
+            parts.append(field(4, 2, T_OPPONENT or b''))
+        elif req in (8, 40) and T_BIGFIGHT:  # start_match / big fight
             parts.append(field(21, 2, T_BIGFIGHT))
         elif req in (9, 41, 157):  # save match / big fight / tutorial fight result
             parts.append(field(22, 2, b''))
