@@ -870,6 +870,9 @@ def process_frame(frame, state):
     print('[pb %d] %s nonce=%d' % (STATS['frames'],
           ', '.join(info['requests']) or '(empty)', info['nonce']), flush=True)
     nums = request_numbers(frame)
+    if not info['uuid'] and not nums:
+        # Пустой кадр (пинг/мониторинг) — не создаём нового игрока в базе.
+        return field(2, 0, int(time.time() * 1000))
     for _num, _payload in request_payloads(frame):
         if _num in (32, 159, 154, 156, 157, 158):
             print('[tut] req %d payload=%s' % (_num, _payload.hex()), flush=True)
