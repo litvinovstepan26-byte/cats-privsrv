@@ -57,6 +57,7 @@ SCHEMA_CANDIDATES = [
 from collections import deque
 
 STATS = {'connections': 0, 'frames': 0}
+DIALOG_SEEN = {}
 LAST = deque(maxlen=60)
 
 # ---------- protobuf ----------
@@ -648,8 +649,8 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             t = tutorial or 0
             # Как настоящий сервер: вступление — при первом запросе диалогов,
             # реплика перед боем — при следующем (после установки детали).
-            seen_n = int(state.get('dlg_count') or 0)
-            state['dlg_count'] = seen_n + 1
+            seen_n = DIALOG_SEEN.get(uuid_str, 0)
+            DIALOG_SEEN[uuid_str] = seen_n + 1
             if t >= 27:
                 src = T_TUTDIALOGS_FIGHT2
             elif t >= 26:
