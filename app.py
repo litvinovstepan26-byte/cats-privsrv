@@ -404,6 +404,55 @@ except Exception:
 LIVE_CONFIG_HASH = CONFIG_META.get('live_config_hash', '')
 
 
+def _replace_field(buf, num, newval, wire=2):
+    out = []
+    done = False
+    for n, w, v in parse_fields(buf):
+        if n == num and not done:
+            out.append((n, wire, newval))
+            done = True
+        else:
+            out.append((n, w, v))
+    if not done:
+        out.append((num, wire, newval))
+    return ser_fields(out)
+
+
+def vai_with_part(vai, template_id=4):
+    """Добавить в шасси деталь с нужным template_id (4 = Gun #001).
+
+    Структура (проверена по дампу):
+      normal_garage(1) -> garage(1) -> vehicle(2) -> container(1) -> chassis(2)
+      шасси: поле 4 (repeated) = установленные детали {6: template_id, 7: pos, 8: ids, 9, 12}
+    """
+    try:
+        garage = [v for n, w, v in parse_fields(vai) if n == 1 and isinstance(v, bytes)][0]
+        g1 = [v for n, w, v in parse_fields(garage) if n == 1 and isinstance(v, bytes)][0]
+        g2 = [v for n, w, v in parse_fields(g1) if n == 2 and isinstance(v, bytes)][0]
+        cont = [v for n, w, v in parse_fields(g2) if n == 1 and isinstance(v, bytes)][0]
+        chassis = [v for n, w, v in parse_fields(cont) if n == 2 and isinstance(v, bytes)][0]
+        entries = [v for n, w, v in parse_fields(chassis) if n == 4 and isinstance(v, bytes)]
+        if not entries:
+            return vai
+        tpl = entries[-1]
+        new_fields = []
+        for n, w, v in parse_fields(tpl):
+            if n == 6:
+                new_fields.append((n, 0, template_id))
+            else:
+                new_fields.append((n, w, v))
+        entry = ser_fields(new_fields)
+        chassis2 = chassis + field(4, 2, entry)
+        cont2 = _replace_field(cont, 2, chassis2)
+        g2b = _replace_field(g2, 1, cont2)
+        g1b = _replace_field(g1, 2, g2b)
+        garage2 = _replace_field(garage, 1, g1b)
+        return _replace_field(vai, 1, garage2)
+    except Exception as e:
+        print('[-] vai_with_part: %r' % (e,), flush=True)
+        return vai
+
+
 def lite_and_vehicles(profile):
     lite_num = PROFILE_FIELDS.get('profile_lite', 1)
     vai_num = PROFILE_FIELDS.get('vehicles_and_inventory')
@@ -505,15 +554,14 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(6, 2, profile))
             if LIVE_CONFIG_HASH:
                 parts.append(field(1002, 2, LIVE_CONFIG_HASH.encode()))
-        elif req in (15, 17):  # install/uninstall_vehicle_part
-            # Отвечаем ack-ом (no_change), а НЕ старым инвентарём: иначе клиент
-            # видит серверную версию машины и снимает только что поставленную деталь.
-            parts.append(field(26, 2, b''))
+        elif req == 15:  # install_vehicle_part -> гараж с установленной деталью
+            parts.append(field(25, 2, vai_with_part(T_VAI or vai or b'')))
+        elif req == 17:  # uninstall_vehicle_part -> базовый гараж
+            parts.append(field(25, 2, T_VAI or vai or b''))
         elif req == 48:
-            if T_VAI:
-                parts.append(field(25, 2, T_VAI))
-            elif vai:
-                parts.append(field(25, 2, vai))
+            base = T_VAI or vai
+            if base:
+                parts.append(field(25, 2, vai_with_part(base)))
         elif req == 98 and lite:
             parts.append(field(38, 2, lite))
         elif req == 37:  # set_name -> updated ProfileLite
@@ -532,7 +580,15 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             # update_client_preferences / start_tutorial_step / set_locale
             parts.append(field(26, 2, b''))  # Response.no_change
         elif req == 44 and T_BET:  # get_bet_fights -> Response.bet_fights(23)
-            parts.append(field(23, 2, T_BET))
+            # в шаблоне записан uuid настоящего игрока; подменяем на наш, иначе
+            # клиент считает бои чужими и не показывает кнопку боя
+            bet = T_BET
+            try:
+                raw = bytes.fromhex(uuid_str) if len(uuid_str) == 32 else uuid_str.encode()[:16]
+                bet = bet.replace(bytes.fromhex('f578a14c9ef147caa0d74fcc26f03cba'), raw)
+            except Exception:
+                pass
+            parts.append(field(23, 2, bet))
         elif req == 35 and T_GLB:  # get_global_leaderboard -> Response(18)
             parts.append(field(18, 2, T_GLB))
         elif req == 214:  # get_groovy_thrust_boosters — отвечаем всегда, пусть и пустым
@@ -772,12 +828,13 @@ def db():
             uuid TEXT PRIMARY KEY, name TEXT, token TEXT,
             coins INTEGER, gems INTEGER, created BIGINT, last_seen BIGINT,
             stage INTEGER DEFAULT 0, tutorial INTEGER DEFAULT 25,
-            bigfight INTEGER DEFAULT 0)""")
+            bigfight INTEGER DEFAULT 0, device TEXT)""")
         # В Postgres упавший ALTER обрывает транзакцию, поэтому коммитим каждый шаг
         conn.commit()
         for name, ddl in (('stage', 'INTEGER DEFAULT 0'),
                           ('tutorial', 'INTEGER DEFAULT 25'),
-                          ('bigfight', 'INTEGER DEFAULT 0')):
+                          ('bigfight', 'INTEGER DEFAULT 0'),
+                          ('device', 'TEXT')):
             try:
                 conn.execute('ALTER TABLE players ADD COLUMN %s %s' % (name, ddl))
                 conn.commit()
@@ -789,11 +846,12 @@ def db():
         uuid TEXT PRIMARY KEY, name TEXT, token TEXT,
         coins INTEGER, gems INTEGER, created INTEGER, last_seen INTEGER,
         stage INTEGER DEFAULT 0, tutorial INTEGER DEFAULT 25,
-        bigfight INTEGER DEFAULT 0)""")
+        bigfight INTEGER DEFAULT 0, device TEXT)""")
     cols = {r[1] for r in conn.execute('PRAGMA table_info(players)')}
     for name, ddl in (('stage', 'INTEGER DEFAULT 0'),
                       ('tutorial', 'INTEGER DEFAULT 25'),
-                      ('bigfight', 'INTEGER DEFAULT 0')):
+                      ('bigfight', 'INTEGER DEFAULT 0'),
+                      ('device', 'TEXT')):
         if name not in cols:
             conn.execute('ALTER TABLE players ADD COLUMN %s %s' % (name, ddl))
     return conn
@@ -847,6 +905,35 @@ def player_upsert(uuid_str, name=None):
             'stage': row[5], 'tutorial': row[6], 'bigfight': row[7]}
 
 
+def player_by_device(device_hex):
+    if not device_hex:
+        return None
+    conn = db()
+    try:
+        row = conn.execute('SELECT uuid,name,token,coins,gems,stage,tutorial,bigfight'
+                           ' FROM players WHERE device=? ORDER BY last_seen DESC LIMIT 1',
+                           (device_hex,)).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return {'uuid': row[0], 'name': row[1], 'token': row[2], 'coins': row[3],
+            'gems': row[4], 'stage': row[5], 'tutorial': row[6], 'bigfight': row[7]}
+
+
+def player_set_device(uuid_str, device_hex):
+    if not device_hex:
+        return
+    conn = db()
+    try:
+        conn.execute('UPDATE players SET device=? WHERE uuid=?', (device_hex, uuid_str))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        conn.close()
+
+
 def player_set_tutorial(uuid_str, value):
     conn = db()
     try:
@@ -869,11 +956,30 @@ def process_frame(frame, state):
     print('[pb %d] %s nonce=%d' % (STATS['frames'],
           ', '.join(info['requests']) or '(empty)', info['nonce']), flush=True)
     nums = request_numbers(frame)
+    device = None
+    for _num, _payload in request_payloads(frame):
+        if _num != 4:
+            continue
+        _i = 0
+        try:
+            while _i < len(_payload):
+                _tag, _i = read_varint(_payload, _i)
+                _n, _w = _tag >> 3, _tag & 7
+                if _w == 0:
+                    _, _i = read_varint(_payload, _i)
+                elif _w == 2:
+                    _ln, _i = read_varint(_payload, _i)
+                    _chunk = _payload[_i:_i + _ln]
+                    _i += _ln
+                    if _n == 3:
+                        device = _chunk.hex()
+        except Exception:
+            pass
     if not info['uuid'] and not nums:
         # Пустой кадр (пинг/мониторинг) — не создаём нового игрока в базе.
         return field(2, 0, int(time.time() * 1000))
     for _num, _payload in request_payloads(frame):
-        if _num in (32, 159, 154, 156, 157, 158):
+        if _num in (15, 17, 32, 159, 154, 156, 157, 158):
             print('[tut] req %d payload=%s' % (_num, _payload.hex()), flush=True)
     if info['uuid']:
         state['uuid'] = info['uuid']
@@ -886,6 +992,8 @@ def process_frame(frame, state):
                   'gems': DEFAULT_GEMS, 'stage': 0, 'tutorial': DEFAULT_TUTORIAL,
                   'bigfight': 0}
     state['name'] = player['name']
+    if device:
+        player_set_device(state['uuid'], device)
     # complete_tutorial_step{ step=1 } -> tutorial_progress = step
     # (в профиле реального игрока tutorial_progress=25, а клиент присылает 0x1a=26)
     for _num, _payload in request_payloads(frame):
