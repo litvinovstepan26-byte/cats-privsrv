@@ -584,10 +584,27 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
                 parts.append(field(25, 2, base))
         elif req == 98 and lite:
             parts.append(field(38, 2, lite))
-        elif req == 37:  # set_name -> полный профиль с новым именем
-            # настоящий сервер отвечает my_profile(6), а не profile_lite:
-            # клиент берёт имя именно оттуда, иначе остаётся playerXXXX
-            if profile:
+        elif req == 37:  # set_name -> profile_lite_with_vehicle(40), как в эталоне
+            if T_PROFILE_WITH_VEHICLE:
+                body = T_PROFILE_WITH_VEHICLE
+                try:
+                    raw = (bytes.fromhex(uuid_str) if len(uuid_str) == 32
+                           else uuid_str.encode()[:16]).ljust(16, b'\0')[:16]
+                    nm = (player_name or ('player' + uuid_str[:4])).encode()
+                    plv = parse_fields(body)
+                    out_parts = []
+                    for pn, pw, pv in plv:
+                        if pn == 1 and isinstance(pv, bytes):
+                            lp = set_first(pv, 1, raw)
+                            lp = set_first(lp, 2, nm)
+                            out_parts.append((pn, pw, lp))
+                        else:
+                            out_parts.append((pn, pw, pv))
+                    body = ser_fields(out_parts)
+                except Exception as e:
+                    print('[-] set_name plv: %r' % (e,), flush=True)
+                parts.append(field(40, 2, body))
+            elif profile:
                 parts.append(field(6, 2, profile))
             elif lite:
                 parts.append(field(38, 2, lite))
@@ -632,7 +649,9 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             if t >= 27:
                 src = T_TUTDIALOGS_FIGHT2
             elif t >= 26:
-                src = T_TUTDIALOGS_FIGHT
+                # клиент мог ещё не показать вступление (кэш чистится на старте),
+                # поэтому отдаём обе порции: repeated-поля просто склеиваются
+                src = (T_TUTDIALOGS or b'') + (T_TUTDIALOGS_FIGHT or b'')
             else:
                 src = T_TUTDIALOGS
             # ВАЖНО: не фильтруем по «просмотренным» — клиент хранит этот список
