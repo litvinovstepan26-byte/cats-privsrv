@@ -1243,7 +1243,16 @@ async def ws_handler(request):
                 },
             }
             body = json.dumps(bal).encode('utf-8')
-            await ws.send_bytes(build_http_response(body))
+            # на HEAD тело не отправляем — иначе клиент считает ответ битым
+            # и уходит в цикл повторов (видно в логах: HEAD / каждые 0.5 c)
+            if msg.data[:4] == b'HEAD':
+                head = (b'HTTP/1.1 200 OK\r\n'
+                        b'Content-Type: application/json\r\n'
+                        b'Content-Length: ' + str(len(body)).encode() + b'\r\n'
+                        b'Connection: keep-alive\r\n\r\n')
+                await ws.send_bytes(head)
+            else:
+                await ws.send_bytes(build_http_response(body))
             continue
 
         buf.extend(msg.data)
