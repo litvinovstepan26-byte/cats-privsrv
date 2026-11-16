@@ -925,12 +925,12 @@ def db():
         conn.execute("""CREATE TABLE IF NOT EXISTS players (
             uuid TEXT PRIMARY KEY, name TEXT, token TEXT,
             coins INTEGER, gems INTEGER, created BIGINT, last_seen BIGINT,
-            stage INTEGER DEFAULT 0, tutorial INTEGER DEFAULT 25,
+            stage INTEGER DEFAULT 0, tutorial INTEGER DEFAULT 0,
             bigfight INTEGER DEFAULT 0, device TEXT)""")
         # В Postgres упавший ALTER обрывает транзакцию, поэтому коммитим каждый шаг
         conn.commit()
         for name, ddl in (('stage', 'INTEGER DEFAULT 0'),
-                          ('tutorial', 'INTEGER DEFAULT 25'),
+                          ('tutorial', 'INTEGER DEFAULT 0'),
                           ('bigfight', 'INTEGER DEFAULT 0'),
                           ('device', 'TEXT')):
             try:
@@ -943,11 +943,11 @@ def db():
     conn.execute("""CREATE TABLE IF NOT EXISTS players (
         uuid TEXT PRIMARY KEY, name TEXT, token TEXT,
         coins INTEGER, gems INTEGER, created INTEGER, last_seen INTEGER,
-        stage INTEGER DEFAULT 0, tutorial INTEGER DEFAULT 25,
+        stage INTEGER DEFAULT 0, tutorial INTEGER DEFAULT 0,
         bigfight INTEGER DEFAULT 0, device TEXT)""")
     cols = {r[1] for r in conn.execute('PRAGMA table_info(players)')}
     for name, ddl in (('stage', 'INTEGER DEFAULT 0'),
-                      ('tutorial', 'INTEGER DEFAULT 25'),
+                      ('tutorial', 'INTEGER DEFAULT 0'),
                       ('bigfight', 'INTEGER DEFAULT 0'),
                       ('device', 'TEXT')):
         if name not in cols:
@@ -959,7 +959,7 @@ DEFAULT_COINS = int(os.environ.get('START_COINS', '1000'))
 DEFAULT_GEMS = int(os.environ.get('START_GEMS', '0'))
 DEFAULT_STAGE = int(os.environ.get('START_STAGE', '0'))
 INSTALL_MODE = os.environ.get('INSTALL_MODE', 'ack')
-DEFAULT_TUTORIAL = int(os.environ.get('START_TUTORIAL', '25'))
+DEFAULT_TUTORIAL = int(os.environ.get('START_TUTORIAL', '0'))
 
 
 def player_get(uuid_str):
