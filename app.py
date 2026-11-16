@@ -382,6 +382,7 @@ T_BIGFIGHT = load_captured('big_fight_data.bin') or b''
 T_LEADERBOARD = load_captured('leaderboard.bin') or b''
 T_LBPOS = load_captured('leaderboard_position.bin') or b''
 T_TUTDIALOGS = load_captured('tutorial_dialogs.bin') or b''
+T_TUTDIALOGS_FIGHT = load_captured('tutorial_dialogs_fight.bin') or b''
 T_OPPONENT = load_captured('opponent.bin') or b''
 T_NEWS = load_captured('news_result.bin')
 T_POPUPLP = load_captured('popup_live_paks.bin')
@@ -622,9 +623,11 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
         elif req == 19 and T_LBPOS:
             parts.append(field(11, 2, T_LBPOS))
         elif req == 150:  # get_tutorial_dialogs
-            # отдаём настоящие диалоги: среди них реплика соперника перед
-            # туториальным боем («мои ребята разнесут этот гараж»)
-            parts.append(field(62, 2, T_TUTDIALOGS or b''))
+            # до установки — вводные диалоги, после (шаг 26) — реплика перед боем
+            if (tutorial or 0) >= 26 and T_TUTDIALOGS_FIGHT:
+                parts.append(field(62, 2, T_TUTDIALOGS_FIGHT))
+            else:
+                parts.append(field(62, 2, T_TUTDIALOGS or b''))
         elif req == 154:  # get_tutorial_championship -> список соперников туториала
             parts.append(field(29, 2, T_INTRO or b''))
         elif req == 155:  # get_tutorial_championship_opponent
