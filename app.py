@@ -19,6 +19,7 @@ Local run:
 """
 
 import asyncio
+import io
 import json
 import os
 import sqlite3
@@ -30,6 +31,24 @@ from aiohttp import web, WSMsgType
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CAPTURED = os.path.join(HERE, 'captured')
+
+
+def _load_env_file(path):
+    """Локальный .env.local / .env (на Render переменные приходят из дашборда)."""
+    try:
+        with io.open(path, encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                k, v = line.split('=', 1)
+                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+    except OSError:
+        pass
+
+
+_load_env_file(os.path.join(HERE, '.env.local'))
+_load_env_file(os.path.join(HERE, '.env'))
 SCHEMA_CANDIDATES = [
     os.path.join(HERE, 'proto_schema.json'),
     os.path.join(HERE, '..', 'work', 'proto_schema.json'),
@@ -452,8 +471,8 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
     gems = player.get('gems') if player else None
     stage = player.get('stage') if player else None
     tutorial = player.get('tutorial') if player else None
-    # tutorial >= 1000 считаем "туториал пройден": не подсовываем диалоги дяди Тони
-    tutorials_done = tutorial is not None and tutorial >= 1000
+    # tutorial >= 200 считаем "туториал пройден": не подсовываем диалоги дяди Тони
+    tutorials_done = tutorial is not None and tutorial >= 200
     bigfight = player.get('bigfight') if player else None
     profile = patch_profile(T_PROFILE, uuid_str, player_name, coins, gems,
                             stage, tutorial, bigfight) if T_PROFILE else b''
@@ -486,6 +505,11 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(6, 2, profile))
             if LIVE_CONFIG_HASH:
                 parts.append(field(1002, 2, LIVE_CONFIG_HASH.encode()))
+        elif req in (15, 17) and profile:  # install/uninstall_vehicle_part
+            body = field(6, 2, profile)
+            if T_VAI:
+                body += field(25, 2, T_VAI)
+            parts.append(body)
         elif req == 48:
             if T_VAI:
                 parts.append(field(25, 2, T_VAI))
@@ -723,6 +747,12 @@ class PgConn:
     def commit(self):
         self._c.commit()
 
+    def rollback(self):
+        try:
+            self._c.rollback()
+        except Exception:
+            pass
+
     def close(self):
         self._c.close()
 
@@ -735,14 +765,16 @@ def db():
             coins INTEGER, gems INTEGER, created BIGINT, last_seen BIGINT,
             stage INTEGER DEFAULT 0, tutorial INTEGER DEFAULT 25,
             bigfight INTEGER DEFAULT 0)""")
+        # В Postgres упавший ALTER обрывает транзакцию, поэтому коммитим каждый шаг
+        conn.commit()
         for name, ddl in (('stage', 'INTEGER DEFAULT 0'),
                           ('tutorial', 'INTEGER DEFAULT 25'),
                           ('bigfight', 'INTEGER DEFAULT 0')):
             try:
                 conn.execute('ALTER TABLE players ADD COLUMN %s %s' % (name, ddl))
+                conn.commit()
             except Exception:
-                pass
-        conn.commit()
+                conn.rollback()
         return conn
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""CREATE TABLE IF NOT EXISTS players (
