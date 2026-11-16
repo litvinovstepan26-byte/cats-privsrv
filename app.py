@@ -505,11 +505,10 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(6, 2, profile))
             if LIVE_CONFIG_HASH:
                 parts.append(field(1002, 2, LIVE_CONFIG_HASH.encode()))
-        elif req in (15, 17) and profile:  # install/uninstall_vehicle_part
-            body = field(6, 2, profile)
-            if T_VAI:
-                body += field(25, 2, T_VAI)
-            parts.append(body)
+        elif req in (15, 17):  # install/uninstall_vehicle_part
+            # Отвечаем ack-ом (no_change), а НЕ старым инвентарём: иначе клиент
+            # видит серверную версию машины и снимает только что поставленную деталь.
+            parts.append(field(26, 2, b''))
         elif req == 48:
             if T_VAI:
                 parts.append(field(25, 2, T_VAI))
