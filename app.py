@@ -207,6 +207,48 @@ def describe_request(payload):
     return hits
 
 
+def request_payloads(frame):
+    """[(номер запроса, payload)] из ClientMessage field 4."""
+    out = []
+    i = 0
+    try:
+        while i < len(frame):
+            tag, i = read_varint(frame, i)
+            num, wt = tag >> 3, tag & 7
+            if wt == 0:
+                _, i = read_varint(frame, i)
+            elif wt == 2:
+                ln, i = read_varint(frame, i)
+                chunk = frame[i:i + ln]
+                i += ln
+                if num == 4:
+                    j = 0
+                    while j < len(chunk):
+                        tag2, j = read_varint(chunk, j)
+                        rn, rw = tag2 >> 3, tag2 & 7
+                        if rw == 0:
+                            _, j = read_varint(chunk, j)
+                        elif rw == 2:
+                            ln2, j = read_varint(chunk, j)
+                            out.append((rn, chunk[j:j + ln2]))
+                            j += ln2
+                        elif rw == 5:
+                            j += 4
+                        elif rw == 1:
+                            j += 8
+                        else:
+                            break
+            elif wt == 5:
+                i += 4
+            elif wt == 1:
+                i += 8
+            else:
+                break
+    except Exception:
+        pass
+    return out
+
+
 def request_numbers(frame):
     """Request field numbers from ClientMessage field 4 (repeated)."""
     out = []
@@ -486,7 +528,7 @@ def build_response_for(nonce, req_nums, uuid_str, req_hash=0, player_name=None,
             parts.append(field(11, 2, T_LBPOS))
         elif req == 150:
             parts.append(field(62, 2, b'' if tutorials_done else (T_TUTDIALOGS or b'')))
-        elif req in (5, 6, 31, 155) and T_OPPONENT:  # find_league/bot/champ/tutorial
+        elif req in (5, 6, 31, 154, 155) and T_OPPONENT:  # find_league/bot/champ/tutorial
             parts.append(field(4, 2, T_OPPONENT))
         elif req in (8, 40, 156) and T_BIGFIGHT:  # start_match / big fight / tutorial fight
             parts.append(field(21, 2, T_BIGFIGHT))
@@ -765,6 +807,15 @@ def player_upsert(uuid_str, name=None):
             'stage': row[5], 'tutorial': row[6], 'bigfight': row[7]}
 
 
+def player_set_tutorial(uuid_str, value):
+    conn = db()
+    try:
+        conn.execute('UPDATE players SET tutorial=? WHERE uuid=?', (int(value), uuid_str))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 # ---------- общая обработка одного protobuf-кадра ----------
 
 def process_frame(frame, state):
@@ -778,10 +829,34 @@ def process_frame(frame, state):
     print('[pb %d] %s nonce=%d' % (STATS['frames'],
           ', '.join(info['requests']) or '(empty)', info['nonce']), flush=True)
     nums = request_numbers(frame)
+    for _num, _payload in request_payloads(frame):
+        if _num in (32, 159, 154, 156, 157, 158):
+            print('[tut] req %d payload=%s' % (_num, _payload.hex()), flush=True)
     if info['uuid']:
         state['uuid'] = info['uuid']
     player = player_upsert(state['uuid'], info.get('set_name'))
     state['name'] = player['name']
+    # complete_tutorial_step{ step=1 } -> tutorial_progress = step
+    # (в профиле реального игрока tutorial_progress=25, а клиент присылает 0x1a=26)
+    for _num, _payload in request_payloads(frame):
+        if _num != 32:
+            continue
+        _i = 0
+        _step = None
+        try:
+            while _i < len(_payload):
+                _tag, _i = read_varint(_payload, _i)
+                _n, _w = _tag >> 3, _tag & 7
+                if _w == 0:
+                    _v, _i = read_varint(_payload, _i)
+                    if _n == 1:
+                        _step = _v
+        except Exception:
+            pass
+        if _step is not None:
+            player_set_tutorial(state['uuid'], min(2000, int(_step)))
+            player['tutorial'] = min(2000, int(_step))
+            print('[tut] progress -> %d' % player['tutorial'], flush=True)
     resp = build_response_for(info['nonce'], nums, state['uuid'],
                               info['hash'], state['name'], player)
     print('[resp %d] requests=%s uuid=%s coins=%d out=%d' % (
