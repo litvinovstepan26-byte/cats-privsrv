@@ -649,7 +649,7 @@ def build_response(nonce):
 
 def frame_response(resp):
     """Список payload'ов для отправки: по одному Response на ServerMessage."""
-    if os.environ.get('SPLIT_RESPONSES', '1') != '1':
+    if os.environ.get('SPLIT_RESPONSES', '0') != '1':
         return [resp]
     try:
         fields = parse_fields(resp)
